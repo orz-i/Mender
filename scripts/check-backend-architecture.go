@@ -139,6 +139,12 @@ func forbiddenDependency(file, imported string) string {
 				return "managed MCP composition boundary"
 			}
 		}
+		// Source Catalog is the canonical v3 SQLite-backed Catalog adapter,
+		// even though its package path no longer ends in infrastructure/sqlite.
+		// Managed MCP callbacks still must not own persistence directly.
+		if imported == internalPrefix+"catalog/infrastructure/sourcecatalog" || strings.HasPrefix(imported, internalPrefix+"catalog/infrastructure/sourcecatalog/") {
+			return "managed MCP persistence callback boundary"
+		}
 		parts := strings.Split(strings.TrimPrefix(imported, internalPrefix), "/")
 		if strings.HasPrefix(imported, internalPrefix) {
 			for i := 0; i+1 < len(parts); i++ {

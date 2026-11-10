@@ -12,7 +12,7 @@ import (
 
 func TestTargetedApprovalQueueCursorSkipsUnresolvedEarlyPages(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "pending-pagination.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "pending-pagination.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

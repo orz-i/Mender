@@ -15,6 +15,7 @@ import (
 	mcp "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profile "github.com/orz-i/Mender/backend/internal/profile/domain"
 	profilesqlite "github.com/orz-i/Mender/backend/internal/profile/infrastructure/sqlite"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	tunnelapp "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnel "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 	tunnelsqlite "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/sqlite"
@@ -23,15 +24,16 @@ import (
 func deliveryFixture(t *testing.T) (*Store, *profilesqlite.Store, profile.Profile, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "delivery.db")
-	profiles, err := profilesqlite.Open(context.Background(), path)
+	v3fixture.Prepare(t, path)
+	profiles, err := profilesqlite.OpenTyped(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = profiles.Close() })
 	id, _ := profile.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profile.NewSlug("selected")
-	first, _ := profile.NewToolBinding(profile.ToolBindingSpec{ToolID: catalog.ToolID("tool_00000000000000000000000000000001"), Alias: "one"})
-	second, _ := profile.NewToolBinding(profile.ToolBindingSpec{ToolID: catalog.ToolID("tool_00000000000000000000000000000002"), Alias: "two"})
+	first, _ := profile.NewToolBinding(profile.ToolBindingSpec{ToolID: catalog.ToolID("tool_882fb9c25db58744f34da684f7f7ab5f"), Alias: "one"})
+	second, _ := profile.NewToolBinding(profile.ToolBindingSpec{ToolID: catalog.ToolID("tool_33a65e204e96265604efddd7536eabd9"), Alias: "two"})
 	p, err := profile.NewProfileWithBindings(id, slug, "Selected", []profile.ToolBinding{first, second})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +45,7 @@ func deliveryFixture(t *testing.T) (*Store, *profilesqlite.Store, profile.Profil
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(context.Background(), path)
+	s, err := OpenTyped(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +95,7 @@ func TestMCPConfigurationIsExplicitAndHasIndependentRevision(t *testing.T) {
 func TestMCPConfigurationCASAcrossConnectionsHasOneWinner(t *testing.T) {
 	t.Parallel()
 	s, _, p, path := deliveryFixture(t)
-	other, err := Open(context.Background(), path)
+	other, err := OpenTyped(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +183,7 @@ func TestProfileMutationPreservesOrPrunesDirectMembershipWithBothFences(t *testi
 func TestMCPConfigureAndProfileRevocationSerializeWithoutRestoringAccess(t *testing.T) {
 	t.Parallel()
 	s, _, p, path := deliveryFixture(t)
-	other, err := profilesqlite.Open(context.Background(), path)
+	other, err := profilesqlite.OpenTyped(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,17 +289,17 @@ func TestMCPConfigTunnelReferenceIsFencedAgainstConcurrentDeletion(t *testing.T)
 func TestMCPStoreRejectsFutureSchemaWithoutChangingIt(t *testing.T) {
 	t.Parallel()
 	s, _, _, path := deliveryFixture(t)
-	if _, err := s.db.Exec("INSERT INTO mcp_delivery_schema_migrations VALUES(2,'future')"); err != nil {
+	if _, err := s.db.Exec("INSERT INTO mcp_delivery_schema_migrations VALUES(999,'future')"); err != nil {
 		t.Fatal(err)
 	}
-	if newer, err := Open(context.Background(), path); err == nil {
+	if newer, err := OpenTyped(context.Background(), path); err == nil {
 		_ = newer.Close()
 		t.Fatal("future delivery schema accepted")
-	} else if !strings.Contains(err.Error(), "newer than supported") {
+	} else if !strings.Contains(err.Error(), "expected version 2") {
 		t.Fatal(err)
 	}
 	var version int
-	if err := s.db.QueryRow("SELECT MAX(version) FROM mcp_delivery_schema_migrations").Scan(&version); err != nil || version != 2 {
+	if err := s.db.QueryRow("SELECT MAX(version) FROM mcp_delivery_schema_migrations").Scan(&version); err != nil || version != 999 {
 		t.Fatalf("future schema changed: %d %v", version, err)
 	}
 }

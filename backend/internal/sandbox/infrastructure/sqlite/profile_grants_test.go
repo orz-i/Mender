@@ -33,7 +33,7 @@ func sandboxProfileContext(t *testing.T, profileID string) gov.Context {
 func readyGrantStore(t *testing.T) *Store {
 	t.Helper()
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "grants.db"))
+	store, err := openSandboxV3(t, ctx, filepath.Join(t.TempDir(), "grants.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestProfileGrantRequiresOwnerAndCapability(t *testing.T) {
 func TestProfileGrantStrictPrincipalAndAtomicRevoke(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "grants-race.db")
-	first, err := Open(ctx, path)
+	first, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestProfileGrantStrictPrincipalAndAtomicRevoke(t *testing.T) {
 	if err := first.CreateRun(ctx, run); err != nil {
 		t.Fatal(err)
 	}
-	second, err := Open(ctx, path)
+	second, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
@@ -29,7 +28,7 @@ func (v workspaceVerifierFixture) IsRegularFile(ctx context.Context, path string
 
 func TestAgentCreationRequiresInjectedWorkspaceVerifierAfterOwnerCheck(t *testing.T) {
 	ctx := context.Background()
-	store, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "verifier.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "verifier.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

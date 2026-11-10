@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func TestTunnelClientIsolationLauncherResolvesHostOwnedExecutable(t *testing.T) {
@@ -23,7 +24,7 @@ func TestTunnelClientIsolationLauncherResolvesHostOwnedExecutable(t *testing.T) 
 	}
 	t.Setenv("PATH", bin)
 
-	governance, err := NewRuntimeGovernance(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	governance, err := NewRuntimeGovernance(ctx, v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestTunnelClientIsolationLauncherResolvesHostOwnedExecutable(t *testing.T) 
 func TestTunnelClientIsolationLauncherFailsWhenExecutableMissing(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("PATH", t.TempDir())
-	governance, err := NewRuntimeGovernance(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	governance, err := NewRuntimeGovernance(ctx, v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestTunnelClientIsolationLauncherFailsWhenExecutableMissing(t *testing.T) {
 // execute the underlying binary with full host authority.
 func TestFreshExternalProviderUsesVerifiedRestrictedHostLauncher(t *testing.T) {
 	ctx := context.Background()
-	governance, err := NewRuntimeGovernance(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	governance, err := NewRuntimeGovernance(ctx, v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}

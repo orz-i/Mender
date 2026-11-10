@@ -154,24 +154,10 @@ func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdoma
 		// must be checked inside the SAME state-CAS transaction, preventing a
 		// Sandbox from being destroyed beneath an authorized Profile.
 		var dependent int
-		if s.typed {
-			err = tx.QueryRowContext(ctx, `SELECT
-			(SELECT COUNT(*) FROM workspace_placements WHERE sandbox_id=?) +
-			(SELECT COUNT(*) FROM profile_tool_target_scopes WHERE sandbox_id=?)`,
-				expected.SandboxID.String(), expected.SandboxID.String()).Scan(&dependent)
-		} else {
-			// Historical Provider-v2 Store fixtures only. The official v3
-			// bootstrap uses OpenTyped and never enters this path.
-			err = tx.QueryRowContext(ctx, `SELECT
-			(SELECT COUNT(*) FROM sandbox_tool_suite_bindings WHERE sandbox_id=?) +
-			(SELECT COUNT(*) FROM sandbox_job_suite_bindings WHERE sandbox_id=?) +
-			(SELECT COUNT(*) FROM provider_configs
-			 WHERE plugin_installation_id IS NULL
-			   AND ((plugin_id='io.mender.provider.workspace' AND config_version=2)
-			     OR (plugin_id='io.mender.provider.sandbox-jobs' AND config_version=1))
-			   AND CASE WHEN json_valid(config_json) THEN json_extract(config_json,'$.sandboxId') END=?)`,
-				expected.SandboxID.String(), expected.SandboxID.String(), expected.SandboxID.String()).Scan(&dependent)
-		}
+		err = tx.QueryRowContext(ctx, `SELECT
+            (SELECT COUNT(*) FROM workspace_placements WHERE sandbox_id=?) +
+            (SELECT COUNT(*) FROM profile_tool_target_scopes WHERE sandbox_id=?)`,
+			expected.SandboxID.String(), expected.SandboxID.String()).Scan(&dependent)
 		if err != nil {
 			return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: Tool target reference check unavailable: %w", err)
 		}

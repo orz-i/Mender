@@ -35,9 +35,8 @@ func (t ExecutionTarget) Validate() error {
 
 // TargetScope is a restrictive, exact allow-set. A zero scope denies every
 // target; there is no "*", auto-grant or implicit all-Sandboxes sentinel.
-// This is a Stage B pure value object, deliberately NOT wired to the active
-// Profile ToolBinding until persisted validation and Invocation enforcement
-// are introduced together in the hard-cut release.
+// The current Profile ToolBinding pipeline loads exact targets from the
+// validated v3 schema. Syntax here is never an authorization grant.
 type TargetScope struct {
 	allowed []ExecutionTarget
 }
@@ -73,8 +72,8 @@ func (s TargetScope) Allows(target ExecutionTarget) bool {
 	return exists
 }
 
-// IsSubsetOf answers whether every permission in this scope is covered by
-// the other scope. It is a migration proof helper, not an authorization grant.
+// IsSubsetOf answers whether every target is covered by another scope;
+// a subset proof never creates or authorizes a Profile ToolBinding.
 func (s TargetScope) IsSubsetOf(other TargetScope) bool {
 	for _, target := range s.allowed {
 		if !other.Allows(target) {

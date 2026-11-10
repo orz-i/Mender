@@ -46,7 +46,7 @@ func TestArchitectureChecksPlatformFilesAndIgnoresTestFixtures(t *testing.T) {
 
 func TestArchitectureRejectsInfrastructureAndReverseApplicationEdges(t *testing.T) {
 	root := t.TempDir()
-	writeArchitectureFixture(t, root, "backend/internal/management/application/query/leak.go", "package query\nimport _ \"github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite\"\n")
+	writeArchitectureFixture(t, root, "backend/internal/management/application/query/leak.go", "package query\nimport _ \"github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sourcecatalog\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/catalog/domain/leak.go", "package domain\nimport _ \"github.com/orz-i/Mender/backend/internal/catalog/application\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/providerplugin/leak.go", "package providerplugin\nimport _ \"github.com/orz-i/Mender/backend/internal/providerplugin/application\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/providerplugin/application/ports.go", "package application\nimport _ \"github.com/orz-i/Mender/backend/internal/catalog/domain\"\n")
@@ -134,7 +134,7 @@ func TestArchitectureKeepsManagedMCPOnCallbacksWithoutRejectingHTTPTypes(t *test
 	for i, imported := range []string{
 		internalPrefix + "bootstrap", internalPrefix + "cli", internalPrefix + "desktop/binding",
 		internalPrefix + "management/httpapi", internalPrefix + "profile/infrastructure/sqlite",
-		internalPrefix + "mcp/infrastructure/sqlite", internalPrefix + "catalog/infrastructure/sqlite/query",
+		internalPrefix + "mcp/infrastructure/sqlite", internalPrefix + "catalog/infrastructure/sourcecatalog",
 		"database/sql", "modernc.org/sqlite",
 	} {
 		file := "backend/internal/mcp/infrastructure/managed/leak_" + string(rune('a'+i)) + "_darwin.go"

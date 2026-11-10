@@ -14,6 +14,7 @@ import (
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -221,13 +222,13 @@ func TestStoreMissingAndStatusValidation(t *testing.T) {
 func TestOpenFreshGenericInstallationSchemaIsCurrentAndIdempotent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "mender.db")
+	path := v3fixture.EmptyDatabase(t)
 	store, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var version int
-	if err := store.db.QueryRowContext(ctx, "SELECT MAX(version) FROM plugin_installation_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
+	if err := store.db.QueryRowContext(ctx, "SELECT MAX(version) FROM plugin_installation_schema_migrations").Scan(&version); err != nil || version != 1 {
 		t.Fatalf("unexpected current installation schema v%d: %v", version, err)
 	}
 	rows, err := store.db.QueryContext(ctx, "PRAGMA table_info(plugin_installations)")
@@ -293,22 +294,15 @@ func TestOpenFailsClosedOnFutureSchemaVersion(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	databasePath := filepath.Join(t.TempDir(), "mender.db")
+	databasePath := v3fixture.EmptyDatabase(t)
 	db, err := sql.Open("sqlite", databasePath)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, `CREATE TABLE plugin_installation_schema_migrations (
-		version INTEGER PRIMARY KEY,
-		applied_at TEXT NOT NULL
-	)`); err != nil {
-		_ = db.Close()
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(
 		ctx,
 		"INSERT INTO plugin_installation_schema_migrations(version, applied_at) VALUES (?, ?)",
-		latestSchemaVersion+1,
+		999,
 		time.Now().UTC().Format(time.RFC3339Nano),
 	); err != nil {
 		_ = db.Close()
@@ -323,14 +317,14 @@ func TestOpenFailsClosedOnFutureSchemaVersion(t *testing.T) {
 		_ = store.Close()
 		t.Fatal("Open() error = nil for future schema")
 	}
-	if !strings.Contains(err.Error(), "newer than supported") {
+	if !strings.Contains(err.Error(), "expected version 1") {
 		t.Fatalf("Open() error = %v", err)
 	}
 }
 
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "mender.db"))
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -139,35 +139,22 @@ func TestCredentialSchemaContainsNoSecretColumns(t *testing.T) {
 	}
 }
 
-func TestOpenRejectsFutureCredentialSchemaVersion(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "mender.db")
+func TestTypedCredentialStoreRejectsFutureSchema(t *testing.T) {
+	path := v3fixture.EmptyDatabase(t)
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`CREATE TABLE credential_schema_migrations (
-		version INTEGER PRIMARY KEY,
-		applied_at TEXT NOT NULL
-	)`); err != nil {
+	defer func() { _ = db.Close() }()
+	if _, err = db.ExecContext(context.Background(), `INSERT INTO credential_schema_migrations(version,applied_at) VALUES(99,'future')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(
-		"INSERT INTO credential_schema_migrations(version, applied_at) VALUES (99, 'future')",
-	); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
 	store, err := Open(context.Background(), path)
 	if store != nil {
 		_ = store.Close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "newer than supported version") {
-		t.Fatalf("Open() error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "expected version 2") {
+		t.Fatalf("future Credential schema accepted: %v", err)
 	}
 }
 
@@ -203,10 +190,7 @@ func TestCredentialRestoreFailsClosedOnMalformedSource(t *testing.T) {
 
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	store, err := Open(
-		context.Background(),
-		filepath.Join(t.TempDir(), "mender.db"),
-	)
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}

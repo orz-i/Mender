@@ -19,7 +19,7 @@ func externalSQLTestContext(t *testing.T) (*Store, sandboxdomain.Sandbox, gov.Co
 	t.Helper()
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "sandbox.db")
-	store, err := Open(ctx, dbPath)
+	store, err := openSandboxV3(t, ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,17 +2,17 @@ package sqlite
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func TestConcurrentDescriptorPublicationCannotReplaceWinningSnapshot(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "concurrent-descriptor.db")
+	path := v3fixture.EmptyDatabase(t)
 	first, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)

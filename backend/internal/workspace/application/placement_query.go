@@ -13,7 +13,8 @@ import (
 // PlacementCandidate describes an owner-reviewed relation between one logical
 // Workspace and one existing Sandbox. The root is backend-specific metadata;
 // it is NOT evidence of a verified mount, sandbox availability, isolation or
-// execution permission. Stage C must independently verify backend and grants.
+// execution permission. The official GuardedRouter independently verifies
+// backend capability, owner and grants at admission.
 type PlacementCandidate struct {
 	Workspace  workspace.Ref
 	SandboxID  string
@@ -37,8 +38,8 @@ func NewPlacementQuery(reader PlacementReader) (PlacementQuery, error) {
 }
 
 // List validates all returned identities before presenting candidates.
-// This is NOT Sandbox admission: no candidate may execute without Stage C's
-// exact owner/grant/policy/generation checks and a Sandbox lease.
+// This is NOT Sandbox admission: no candidate may execute without the
+// official owner/grant/policy/generation checks and a Sandbox lease.
 func (q PlacementQuery) List(ctx context.Context, ref workspace.Ref) ([]PlacementCandidate, error) {
 	if err := ref.Validate(); err != nil {
 		return nil, err

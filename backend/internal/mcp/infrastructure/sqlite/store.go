@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
-	"path/filepath"
 	"strings"
 
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -19,70 +17,6 @@ import (
 )
 
 type Store struct{ db *sql.DB }
-
-// Open never repairs or partly migrates delivery ownership. Profile Open owns
-// the atomic legacy handoff to Profile 7 + MCP delivery 1 before composition.
-func Open(ctx context.Context, path string) (*Store, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("open MCP delivery: empty database path")
-	}
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	slashed := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(slashed, "/") {
-		slashed = "/" + slashed
-	}
-	u := url.URL{Scheme: "file", Path: slashed}
-	query := u.Query()
-	query.Add("_pragma", "foreign_keys(1)")
-	query.Add("_pragma", "busy_timeout(5000)")
-	u.RawQuery = query.Encode()
-	db, err := sql.Open("sqlite", u.String())
-	if err != nil {
-		return nil, err
-	}
-	store := &Store{db: db}
-	if err := store.checkSchema(ctx); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if _, err := ensureTunnelGuards(ctx, tx); err != nil {
-		_ = tx.Rollback()
-		_ = db.Close()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	return store, nil
-}
-
-func (s *Store) checkSchema(ctx context.Context) error {
-	for _, schema := range []struct {
-		table   string
-		version int
-	}{{"profile_schema_migrations", 7}, {"mcp_delivery_schema_migrations", 1}} {
-		var version int
-		if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(version),0) FROM "+schema.table).Scan(&version); err != nil {
-			return fmt.Errorf("open MCP delivery: requires atomic Profile 7/MCP delivery 1 migration: %w", err)
-		}
-		if version > schema.version {
-			return fmt.Errorf("%s version %d is newer than supported version %d", schema.table, version, schema.version)
-		}
-		if version != schema.version {
-			return fmt.Errorf("open MCP delivery: %s must be version %d, got %d", schema.table, schema.version, version)
-		}
-	}
-	return nil
-}
 
 func (s *Store) Close() error { return s.db.Close() }
 

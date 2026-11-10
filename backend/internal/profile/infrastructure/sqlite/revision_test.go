@@ -48,8 +48,8 @@ func TestProfileRevisionPreventsStaleRevocationRestore(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
 	initial := auditProfile(t, store)
-	toolA := auditTool(t, "tool_00000000000000000000000000000001")
-	toolB := auditTool(t, "tool_00000000000000000000000000000002")
+	toolA := auditTool(t, "tool_882fb9c25db58744f34da684f7f7ab5f")
+	toolB := auditTool(t, "tool_33a65e204e96265604efddd7536eabd9")
 	initial, err := initial.AddBinding(auditBinding(t, toolA, true))
 	if err != nil {
 		t.Fatal(err)
@@ -116,12 +116,12 @@ func TestProfileRevisionPreventsStaleRevocationRestore(t *testing.T) {
 func TestProfileRevisionCASAcrossSQLiteConnections(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "profiles.db")
-	a, err := Open(ctx, path)
+	a, err := openProfileV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = a.Close() }()
-	b, err := Open(ctx, path)
+	b, err := openProfileV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,8 +135,8 @@ func TestProfileRevisionCASAcrossSQLiteConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshotA, _ = snapshotA.AddBinding(auditBinding(t, auditTool(t, "tool_00000000000000000000000000000001"), true))
-	snapshotB, _ = snapshotB.AddBinding(auditBinding(t, auditTool(t, "tool_00000000000000000000000000000002"), true))
+	snapshotA, _ = snapshotA.AddBinding(auditBinding(t, auditTool(t, "tool_882fb9c25db58744f34da684f7f7ab5f"), true))
+	snapshotB, _ = snapshotB.AddBinding(auditBinding(t, auditTool(t, "tool_33a65e204e96265604efddd7536eabd9"), true))
 
 	start := make(chan struct{})
 	results := make(chan error, 2)

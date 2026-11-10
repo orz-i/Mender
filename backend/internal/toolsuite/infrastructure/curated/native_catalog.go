@@ -88,10 +88,9 @@ var reviewedNativeCatalog = map[string]nativeMetadata{
 	},
 }
 
-// PlannedNativeCatalogTools constructs the exact host-reviewed Tool metadata
-// for the reserved IDs. It never publishes them to the live Catalog or
-// activates a Sandbox. Stage E must check each ID for collision and migrate
-// every old Profile/Policy reference atomically before these can be supplied.
+// PlannedNativeCatalogTools constructs the pinned host-reviewed Tool
+// metadata used for the v3 canonical Catalog. It has no side effects and
+// never opens or activates a Sandbox or adds Profile grants.
 func PlannedNativeCatalogTools(createdAt time.Time) ([]catalog.Tool, error) {
 	entries, err := PlannedNativeTools()
 	if err != nil {

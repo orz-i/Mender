@@ -24,7 +24,6 @@ import (
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpmanaged "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/managed"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
@@ -40,6 +39,7 @@ import (
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
 	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnelexternal "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/external"
@@ -121,10 +121,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	// The official CLI, menderd and Wails entry accepts the COMPLETE typed v3
 	// schema only. A v2 or partially migrated DB is never repaired in place:
 	// operators must back up and explicitly replace v2 data; no implicit migration.
-	if err := ensureFreshTypedDatabase(options.DatabasePath); err != nil {
+	if err := v3schema.EnsureFreshDatabase(options.DatabasePath); err != nil {
 		return nil, fmt.Errorf("compose runtime: v3 fresh schema: %w", err)
 	}
-	preflight, err := hardcut.OpenTypedContextStore(ctx, options.DatabasePath)
+	preflight, err := v3schema.OpenContextStore(ctx, options.DatabasePath)
 	if err != nil {
 		return nil, fmt.Errorf("compose runtime: v3 schema required: %w", err)
 	}
@@ -513,7 +513,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: typed Profile supply: %w", err)
 	}
-	typedInventoryDB, err := hardcut.OpenTypedContextStore(ctx, options.DatabasePath)
+	typedInventoryDB, err := v3schema.OpenContextStore(ctx, options.DatabasePath)
 	if err != nil {
 		_ = typedReader.Close()
 		_ = skills.Close()

@@ -12,7 +12,7 @@ import (
 
 func TestAgentWorkspaceAdmissionFencesExactApprovedDirectoryAgainstRebind(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "fence.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "fence.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestAgentWorkspaceAdmissionFencesExactApprovedDirectoryAgainstRebind(t *tes
 
 func TestAgentWorkspaceDuplicateReturnsTypedConflictWithoutChangingGrants(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "duplicates.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "duplicates.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

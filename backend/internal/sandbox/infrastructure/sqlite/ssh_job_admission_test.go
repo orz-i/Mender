@@ -13,12 +13,12 @@ import (
 func TestSSHJobPausePersistsAndAtomicallyDeniesSubmissionsAcrossRuntimes(t *testing.T) {
 	filename, id, run, owner := newFencedSSHFixture(t)
 	ctx := context.Background()
-	first, err := Open(ctx, filename)
+	first, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = first.Close() }()
-	second, err := Open(ctx, filename)
+	second, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +87,11 @@ func TestSSHJobPauseRacesFirstSubmissionWithoutLosingState(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		filename, id, run, owner := newFencedSSHFixture(t)
 		ctx := context.Background()
-		one, err := Open(ctx, filename)
+		one, err := openSandboxV3(t, ctx, filename)
 		if err != nil {
 			t.Fatal(err)
 		}
-		two, err := Open(ctx, filename)
+		two, err := openSandboxV3(t, ctx, filename)
 		if err != nil {
 			_ = one.Close()
 			t.Fatal(err)

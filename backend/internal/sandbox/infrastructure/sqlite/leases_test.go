@@ -26,7 +26,7 @@ func leasePrincipal(t *testing.T) governance.Context {
 func TestSandboxLeasePersistsAcrossProcessesAndRestart(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "lease.db")
-	first, err := Open(ctx, path)
+	first, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestSandboxLeasePersistsAcrossProcessesAndRestart(t *testing.T) {
 	if err := first.CreateRun(ctx, run); err != nil {
 		t.Fatal(err)
 	}
-	second, err := Open(ctx, path)
+	second, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestSandboxLeasePersistsAcrossProcessesAndRestart(t *testing.T) {
 func TestLeaseReservationAtomicAcrossConcurrentSQLiteConnections(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "race.db")
-	first, err := Open(ctx, path)
+	first, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestLeaseReservationAtomicAcrossConcurrentSQLiteConnections(t *testing.T) {
 	if err := first.CreateRun(ctx, run); err != nil {
 		t.Fatal(err)
 	}
-	second, err := Open(ctx, path)
+	second, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestLeaseReservationAtomicAcrossConcurrentSQLiteConnections(t *testing.T) {
 }
 func TestLeaseReservationValidatesRunGenerationAndState(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "state.db"))
+	store, err := openSandboxV3(t, ctx, filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

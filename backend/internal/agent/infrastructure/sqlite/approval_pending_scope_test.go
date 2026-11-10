@@ -109,7 +109,7 @@ func ctxScope() context.Context { return context.Background() }
 // inbox, yet the Agent/workspace query still returns exactly the eligible rows.
 func TestWorkspaceScopePendingListFiltersBeforeLimit(t *testing.T) {
 	ctx := ctxScope()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "pending-scope.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "pending-scope.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestWorkspaceScopePendingListFiltersBeforeLimit(t *testing.T) {
 // mode, or a parallel workspace with no policy) must not hide eligible ones.
 func TestWorkspaceScopePendingListKeepsEligibleSameAgentRequests(t *testing.T) {
 	ctx := ctxScope()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "pending-scope-eligible.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "pending-scope-eligible.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func TestResolveApprovalByPolicyTaskCapParity(t *testing.T) {
 	ctx := ctxScope()
 	dbPath := filepath.Join(t.TempDir(), "approval-cap-parity.db")
 	setupApprovalPolicyFenceFixture(t, dbPath)
-	s, err := Open(ctx, dbPath)
+	s, err := openAgentV3(t, ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

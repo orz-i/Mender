@@ -22,10 +22,12 @@ func TestTypedCatalogUsesSourceRefForBrowseSearchAndRevisionFences(t *testing.T)
 		{provider, []catalog.Tool{providerTool}},
 		{agentA, []catalog.Tool{firstAgent}},
 		{agentB, []catalog.Tool{secondAgent}},
-		{native, nativeWorkspaceTools(t, native)},
+		{native, nativeWorkspaceTools(t, db, native)},
 	} {
-		if err := repo.UpsertSourceSnapshot(ctx, suite.source, suite.tools); err != nil {
-			t.Fatal(err)
+		if suite.source.Kind() != catalog.SourceNative {
+			if err := repo.UpsertSourceSnapshot(ctx, suite.source, suite.tools); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	// The same application BrowseTools and SearchTools ports used by CLI

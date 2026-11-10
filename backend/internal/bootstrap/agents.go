@@ -42,11 +42,9 @@ func newTypedAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	return composeAgentService(ctx, store, owner, profiles, policies, governance, fixtureRunner)
 }
 
-// composeAgentService is the ONE Agent/ACP Task Service composer for both
-// existing v2 and future v3 persistence. Opening or recovering a Store is a
-// separate lifecycle decision: an offline v3 candidate must not expire its
-// pending approvals or reclassify unknown Tasks merely because it was opened.
-// Only the eventual single v3 Runtime may authorize those transitions.
+// composeAgentService is the single Agent/ACP Task Service composer for v3.
+// Store opening is inert; only the official Runtime may reconcile overdue
+// Tasks and pending approvals after explicit ownership and generation checks.
 func composeAgentService(ctx context.Context, store *agentsqlite.Store, owner gov.Principal,
 	profiles *Profiles, policies *Policies, governance *RuntimeGovernance,
 	fixtureRunner agentapplication.Executor,

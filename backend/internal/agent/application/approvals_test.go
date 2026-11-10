@@ -9,7 +9,6 @@ import (
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
@@ -68,7 +67,7 @@ func TestExplicitOwnerApprovalAllowsOnceWithoutProfileImpersonation(t *testing.T
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "owner-approval.db")
 	requireApprovalFixturePolicy(t, dbPath)
-	db, err := agentsqlite.Open(ctx, dbPath)
+	db, err := openAgentV3(t, ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +168,7 @@ func newApprovalFixture(t *testing.T) (*Service, gov.Context, *approvalExecutorF
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "approval.db")
 	requireApprovalFixturePolicy(t, dbPath)
-	db, err := agentsqlite.Open(ctx, dbPath)
+	db, err := openAgentV3(t, ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

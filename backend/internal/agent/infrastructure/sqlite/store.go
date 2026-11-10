@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,40 +23,6 @@ func formatChronologicalTime(value time.Time) string {
 // It intentionally owns no executable and never resolves credentials.
 type Store struct{ db *sql.DB }
 
-func Open(ctx context.Context, path string) (*Store, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("agent sqlite: missing path")
-	}
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	slashed := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(slashed, "/") {
-		slashed = "/" + slashed
-	}
-	u := url.URL{Scheme: "file", Path: slashed}
-	q := u.Query()
-	q.Add("_pragma", "foreign_keys(1)")
-	q.Add("_pragma", "busy_timeout(5000)")
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-	if err = db.PingContext(ctx); err == nil {
-		err = migrate(ctx, db)
-	}
-	if err == nil {
-		err = (&Store{db: db}).InvalidateAllPendingApprovals(ctx)
-	}
-	if err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open agent sqlite: %w", err)
-	}
-	return &Store{db: db}, nil
-}
 func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) CreateAgent(ctx context.Context, a agentdomain.Agent) error {
 	v := a.Spec()
@@ -119,9 +83,8 @@ func (s *Store) ListAgents(ctx context.Context) ([]agentdomain.Agent, error) {
 func (s *Store) DeleteAgent(ctx context.Context, id agentdomain.ID) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM agents WHERE agent_id=?`, string(id))
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "constraint failed") ||
-			strings.Contains(err.Error(), "Agent is referenced by a Provider") {
-			return fmt.Errorf("%w: Agent still referenced by task or Provider", agentdomain.ErrConflict)
+		if strings.Contains(strings.ToLower(err.Error()), "constraint failed") {
+			return fmt.Errorf("%w: Agent is still referenced by Tasks, Tools or Grants", agentdomain.ErrConflict)
 		}
 		return fmt.Errorf("delete Agent: %w", err)
 	}

@@ -4,17 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
-// OpenTyped reuses existing Sandbox/Lease/SSH Job persistence on an already
-// upgraded v3 schema. Unlike legacy Open it performs NO pre-upgrade backup or
-// per-context migration, no lease recovery, no Job reattachment and no remote
-// probe. F4 Runtime must do all release and lifecycle admission separately.
+// OpenTyped is the sole Sandbox Store constructor. It requires an already
+// validated v3 schema and performs no migration, backup, lease recovery, Job
+// reattachment or remote probe. Those lifecycle decisions belong to Runtime.
 func OpenTyped(ctx context.Context, path string) (*Store, error) {
-	db, err := hardcut.OpenTypedContextStore(ctx, path)
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("open typed Sandbox sqlite: %w", err)
 	}
-	return &Store{db: db, typed: true}, nil
+	return &Store{db: db}, nil
 }

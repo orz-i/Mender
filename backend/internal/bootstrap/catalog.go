@@ -10,7 +10,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	"github.com/orz-i/Mender/backend/internal/catalog/infrastructure/identity"
 	sourcecatalog "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sourcecatalog"
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
 // CatalogOptions configures the Catalog composition root.
@@ -63,7 +63,7 @@ type Catalog struct {
 // Agent/Provider identity; no Sandbox/Agent can grant itself a Tool source. This
 // constructor is used by the official Runtime composition.
 func NewTypedCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
-	db, err := hardcut.OpenTypedContextStore(ctx, options.DatabasePath)
+	db, err := v3schema.OpenContextStore(ctx, options.DatabasePath)
 	if err != nil {
 		return nil, fmt.Errorf("compose typed catalog: %w", err)
 	}

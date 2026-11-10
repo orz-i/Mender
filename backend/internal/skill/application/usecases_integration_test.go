@@ -12,6 +12,7 @@ import (
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	skilllocalfs "github.com/orz-i/Mender/backend/internal/skill/infrastructure/localfs"
 	skillsqlite "github.com/orz-i/Mender/backend/internal/skill/infrastructure/sqlite"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func TestManagedSkillInstallationLifecycle(t *testing.T) {
@@ -19,7 +20,9 @@ func TestManagedSkillInstallationLifecycle(t *testing.T) {
 
 	ctx := context.Background()
 	temp := t.TempDir()
-	repository, err := skillsqlite.Open(ctx, filepath.Join(temp, "mender.db"))
+	path := filepath.Join(temp, "mender.db")
+	v3fixture.Prepare(t, path)
+	repository, err := skillsqlite.Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

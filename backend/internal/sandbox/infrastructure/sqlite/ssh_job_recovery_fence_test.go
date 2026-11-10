@@ -13,12 +13,12 @@ import (
 func TestSSHRecoveryFenceRequiresPausedOwnedGenerationAndTracksAudit(t *testing.T) {
 	filename, id, run, owner := newFencedSSHFixture(t)
 	ctx := context.Background()
-	first, err := Open(ctx, filename)
+	first, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = first.Close() }()
-	second, err := Open(ctx, filename)
+	second, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}

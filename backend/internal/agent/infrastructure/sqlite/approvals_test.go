@@ -54,11 +54,11 @@ func newFixtureApproval(t *testing.T, a agentdomain.Agent, task agentdomain.Task
 		SessionID: "synthetic-session", ToolCallID: call, Kind: "read", Target: "fixture.txt", CanAllow: true, AllowOptionID: "yes-once", RejectOptionID: "no",
 		Status: agentdomain.ApprovalPending, CreatedAt: now, ExpiresAt: now.Add(time.Minute)}
 }
-func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
+func TestApprovalStoreOneShotCASAndImmutableHistoryV3(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "approval-v10.db")
+	path := filepath.Join(t.TempDir(), "approval-v3.db")
 	setupApprovalPolicyFenceFixture(t, path)
-	s, err := Open(ctx, path)
+	s, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,15 +110,15 @@ func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
 		t.Fatalf("bounded ledger query %+v %v", records, err)
 	}
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
-		t.Fatalf("missing forward schema v10: %d %v", version, err)
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 20 {
+		t.Fatalf("typed v3 Agent schema mismatch: %d %v", version, err)
 	}
 }
-func TestApprovalStoreStartupInvalidatesInterruptedACPDecision(t *testing.T) {
+func TestApprovalStoreExplicitRecoveryInvalidatesInterruptedACPDecision(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "interrupted.db")
 	setupApprovalPolicyFenceFixture(t, path)
-	s, err := Open(ctx, path)
+	s, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,11 +130,20 @@ func TestApprovalStoreStartupInvalidatesInterruptedACPDecision(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := Open(ctx, path)
+	restarted, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = restarted.Close() }()
+	// Store open performs no implicit recovery. The official Runtime reviews
+	// Task ownership, then explicitly expires interrupted ACP decisions.
+	pending, err := restarted.GetApproval(ctx, approval.ID)
+	if err != nil || pending.Status != agentdomain.ApprovalPending {
+		t.Fatalf("typed Store secretly changed pending ACP approval: %+v %v", pending, err)
+	}
+	if err = restarted.InvalidateAllPendingApprovals(ctx); err != nil {
+		t.Fatal(err)
+	}
 	recovered, err := restarted.GetApproval(ctx, approval.ID)
 	if err != nil || recovered.Status != agentdomain.ApprovalExpired {
 		t.Fatalf("restarted runtime kept a stale authorization: %+v %v", recovered, err)
@@ -150,7 +159,7 @@ func TestApprovalStoreRejectsUnreviewableNativeActionAtSQLiteCAS(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "approval-reviewability.db")
 	setupApprovalPolicyFenceFixture(t, path)
-	s, err := Open(ctx, path)
+	s, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

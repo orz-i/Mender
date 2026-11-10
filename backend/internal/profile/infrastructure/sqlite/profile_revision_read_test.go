@@ -13,12 +13,12 @@ import (
 func TestProfileRevisionReadObservesOtherConnectionsWithoutMutation(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "profiles.db")
-	first, err := Open(ctx, path)
+	first, err := openProfileV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = first.Close() }()
-	second, err := Open(ctx, path)
+	second, err := openProfileV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

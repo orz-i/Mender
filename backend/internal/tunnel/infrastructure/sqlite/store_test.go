@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
@@ -14,7 +15,7 @@ import (
 func TestTunnelRoundTripConflictAndDelete(t *testing.T) {
 	t.Parallel()
 
-	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "mender.db"))
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +89,7 @@ func TestOpenRejectsFutureTunnelSchemaVersion(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "mender.db")
+	v3fixture.Prepare(t, path)
 	store, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -106,6 +108,6 @@ func TestOpenRejectsFutureTunnelSchemaVersion(t *testing.T) {
 		_ = reopened.Close()
 	}
 	if err == nil {
-		t.Fatal("Open() error = nil, want future schema rejection")
+		t.Fatal("pinned v3 Tunnel Store accepted unsupported future schema")
 	}
 }

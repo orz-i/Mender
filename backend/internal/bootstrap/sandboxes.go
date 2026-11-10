@@ -9,11 +9,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
-
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	pluginprocess "github.com/orz-i/Mender/backend/internal/plugin/process"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
@@ -28,6 +26,7 @@ import (
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	"github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/typedlease"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
 // Sandboxes owns the persistent Sandbox inventory and a fail-closed Execution
@@ -68,7 +67,7 @@ func NewTypedSandboxes(ctx context.Context, databasePath string, policy sandboxa
 	if err != nil {
 		return nil, fmt.Errorf("compose typed sandboxes: %w", err)
 	}
-	leaseDB, err := hardcut.OpenTypedContextStore(ctx, databasePath)
+	leaseDB, err := v3schema.OpenContextStore(ctx, databasePath)
 	if err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("compose typed Sandbox lease: %w", err)

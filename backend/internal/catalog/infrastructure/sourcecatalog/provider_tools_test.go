@@ -59,10 +59,7 @@ func TestTypedCatalogReusesExternalProviderApplicationWithoutFabricatingNativePr
 		t.Fatalf("Provider list failed: %+v %v", providers, err)
 	}
 
-	nativeTools := nativeWorkspaceTools(t, nativeSource)
-	if err := repo.UpsertSourceSnapshot(ctx, nativeSource, nativeTools); err != nil {
-		t.Fatal(err)
-	}
+	nativeTools := nativeWorkspaceTools(t, db, nativeSource)
 	schema, err := catalog.NewSchema([]byte(`{"type":"object"}`))
 	if err != nil {
 		t.Fatal(err)

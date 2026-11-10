@@ -26,8 +26,8 @@ type WorkspaceAuthority interface {
 }
 
 // BindingScopeLookup reads the *current* exact Profile ToolBinding target
-// restriction. A missing record MUST fail closed. No Stage C production
-// implementation exists until the Profile persistence hard cut.
+// restriction. Missing or stale records MUST fail closed; the official
+// Profile v3 persistence is the authority for the current binding.
 type BindingScopeLookup interface {
 	BindingTargetScope(context.Context, string, catalog.ToolID) (profile.TargetScope, bool, error)
 }
@@ -60,10 +60,9 @@ type GuardedDependencies struct {
 	Admissions InvocationAdmissionVerifier
 }
 
-// GuardedRouter is a Stage C *non-production-wired* planning/acquisition
-// adapter. The current Provider-backed Tool pipeline remains authoritative
-// until SourceRef/TargetScope persistence and Invocation integration ship
-// together. Only the existing Invocation admission can approve a Tool call.
+// GuardedRouter is the production v3 native Workspace placement and lease
+// adapter. It consumes only an approved canonical Invocation attempt; no
+// caller-supplied target facts can authorize a Tool call.
 type GuardedRouter struct{ deps GuardedDependencies }
 
 func NewGuardedRouter(deps GuardedDependencies) (GuardedRouter, error) {
@@ -385,8 +384,8 @@ func reviewedWorkspacePath(op workspace.Operation, ref workspace.Ref, arguments 
 // Acquire takes facts ALREADY admitted by the canonical Invocation policy and
 // binding gate. It proves the exact facts/target still match and then delegates
 // Sandbox policy, grant, budget and durable lease checks to the existing Router.
-// No Stage C production entry point invokes it until stages D–F wire the
-// admitted Invocation attempt and TargetScope persistence together.
+// Only the already-admitted Invocation may call Acquire after it has frozen
+// TargetScope and governance facts; stale grants or generation fail closed.
 func (r GuardedRouter) Acquire(ctx context.Context, frozen FrozenPlacement, invocationID invocation.InvocationID, admitted invocation.GovernanceFacts) (*workspaceapp.Lease, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

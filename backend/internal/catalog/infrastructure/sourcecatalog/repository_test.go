@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -12,8 +11,9 @@ import (
 	"time"
 
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	legacysqlite "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite"
-	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
+	v2fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v2"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -28,17 +28,12 @@ func (a approvedOwners) VerifySourceOwner(_ context.Context, s catalog.SourceRef
 
 func testDatabase(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "future-catalog.sqlite"))
+	path := v3fixture.EmptyDatabase(t)
+	db, err := v3schema.OpenContextStore(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	for _, statement := range FreshSchema() {
-		if _, err := db.ExecContext(context.Background(), statement); err != nil {
-			t.Fatalf("future schema statement failed: %v: %s", err, statement)
-		}
-	}
 	return db
 }
 
@@ -74,6 +69,18 @@ func futureFixture(t *testing.T) (*sql.DB, *Repository, catalog.SourceRef, catal
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, seed := range []struct {
+		id   string
+		name string
+	}{
+		{agentA.ID(), "Agent A"}, {agentB.ID(), "Agent B"},
+	} {
+		_, err = db.Exec(`INSERT INTO agents(agent_id,name,backend,plugin_id,extension_id,workspace_root,isolation,owner_kind,owner_ref,created_at,default_model,default_reasoning_effort)
+  VALUES(?,?,'grok','io.mender.agent.grok','main','/tmp/agent-fixture','host','local_user','os:fixture','2026-11-09T00:00:00Z','','')`, seed.id, seed.name)
+		if err != nil {
+			t.Fatalf("seed v3 owned Agent: %v", err)
+		}
+	}
 	owners := approvedOwners{map[catalog.SourceRef]bool{
 		provider: true, agentA: true, agentB: true, native: true,
 	}}
@@ -84,17 +91,26 @@ func futureFixture(t *testing.T) (*sql.DB, *Repository, catalog.SourceRef, catal
 	return db, repo, provider, agentA, agentB, native
 }
 
-func nativeWorkspaceTools(t *testing.T, source catalog.SourceRef) []catalog.Tool {
+func nativeWorkspaceTools(t *testing.T, db *sql.DB, source catalog.SourceRef) []catalog.Tool {
 	t.Helper()
-	defs, err := curated.PlannedNativeCatalogTools(time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC))
+	rows, err := db.QueryContext(context.Background(), `SELECT id,source_kind,source_id,source_key,name,title,description,input_schema,output_schema,tags_json,created_at,updated_at FROM tools WHERE source_kind=? AND source_id=? ORDER BY source_key`, string(source.Kind()), source.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = rows.Close() }()
 	result := []catalog.Tool{}
-	for _, def := range defs {
-		if def.SourceRef() == source {
-			result = append(result, def)
+	for rows.Next() {
+		tool, err := scanSourceTool(rows)
+		if err != nil {
+			t.Fatal(err)
 		}
+		result = append(result, tool)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 4 {
+		t.Fatalf("pinned v3 Workspace source Tool count=%d", len(result))
 	}
 	return result
 }
@@ -107,12 +123,7 @@ func TestSourceRepositoryFailsClosedWithLegacyOrMissingSchema(t *testing.T) {
 	if _, err := NewRepository(context.Background(), db, nil); err == nil {
 		t.Fatal("nil owner verifier accepted")
 	}
-	legacyPath := filepath.Join(t.TempDir(), "old.sqlite")
-	legacy, err := legacysqlite.Open(context.Background(), legacyPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = legacy.Close() }()
+	legacyPath := v2fixture.EmptyDatabase(t)
 	oldDB, err := sql.Open("sqlite", legacyPath)
 	if err != nil {
 		t.Fatal(err)
@@ -136,10 +147,12 @@ func TestSourceRepositoryProviderAgentNativeSnapshotsRemainIndependent(t *testin
 		{provider, []catalog.Tool{providerTool}},
 		{agentA, []catalog.Tool{agentToolA}},
 		{agentB, []catalog.Tool{agentToolB}},
-		{native, nativeWorkspaceTools(t, native)},
+		{native, nativeWorkspaceTools(t, db, native)},
 	} {
-		if err := repo.UpsertSourceSnapshot(ctx, tc.source, tc.tools); err != nil {
-			t.Fatalf("upsert %s: %v", tc.source, err)
+		if tc.source.Kind() != catalog.SourceNative {
+			if err := repo.UpsertSourceSnapshot(ctx, tc.source, tc.tools); err != nil {
+				t.Fatalf("upsert %s: %v", tc.source, err)
+			}
 		}
 		recovered, err := repo.ListSourceTools(ctx, tc.source)
 		if err != nil || !reflect.DeepEqual(snapshotIDs(recovered), snapshotIDs(tc.tools)) {
@@ -153,7 +166,7 @@ func TestSourceRepositoryProviderAgentNativeSnapshotsRemainIndependent(t *testin
 		}
 	}
 	counts, err := repo.ListSourceCounts(ctx)
-	if err != nil || len(counts) != 4 {
+	if err != nil || len(counts) != 5 {
 		t.Fatalf("source count mismatch: %+v, %v", counts, err)
 	}
 	if counts[0].Source == counts[1].Source {
@@ -181,7 +194,7 @@ func TestSourceRepositoryProviderAgentNativeSnapshotsRemainIndependent(t *testin
 		}
 	}
 	var ftsRows int
-	if err := db.QueryRow("SELECT COUNT(*) FROM tools_fts").Scan(&ftsRows); err != nil || ftsRows != 7 {
+	if err := db.QueryRow("SELECT COUNT(*) FROM tools_fts").Scan(&ftsRows); err != nil || ftsRows != 9+3 {
 		t.Fatalf("fts rows=%d err=%v", ftsRows, err)
 	}
 	assertDBIntegrity(t, db)
@@ -231,7 +244,7 @@ func TestSourceRepositoryPreservesIdentityOnMetadataRefreshAndFailsClosed(t *tes
 	if err := repo.UpsertSourceSnapshot(ctx, native, []catalog.Tool{invalidNative}); err == nil {
 		t.Fatal("arbitrary ToolID claimed privileged native source")
 	}
-	validNative := nativeWorkspaceTools(t, native)
+	validNative := nativeWorkspaceTools(t, db, native)
 	forged, err := validNative[0].RefreshMetadata(catalog.ToolSpec{
 		SourceKey: validNative[0].SourceKey(), Name: validNative[0].Name(), Title: validNative[0].Title(),
 		Description: validNative[0].Description(), InputSchema: validNative[0].InputSchema(),
@@ -259,8 +272,17 @@ func TestSourceRepositoryPreservesIdentityOnMetadataRefreshAndFailsClosed(t *tes
 		t.Fatal("owner check bypassed SQL Provider foreign owner")
 	}
 	counts, err := repo.ListSourceCounts(ctx)
-	if err != nil || len(counts) != 1 || counts[0].Count != 1 {
-		t.Fatalf("failed transaction partially committed: %+v %v", counts, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var agentCount int
+	for _, count := range counts {
+		if count.Source == agentA {
+			agentCount = count.Count
+		}
+	}
+	if agentCount != 1 {
+		t.Fatalf("failed transaction modified Agent source: %+v", counts)
 	}
 	assertDBIntegrity(t, db)
 }

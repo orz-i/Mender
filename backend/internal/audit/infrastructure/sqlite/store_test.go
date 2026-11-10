@@ -3,10 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"slices"
 	"testing"
 	"time"
+
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -253,7 +254,7 @@ func auditTestContext(t *testing.T, origin governancedomain.Origin) governancedo
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 
-	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "audit.db"))
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

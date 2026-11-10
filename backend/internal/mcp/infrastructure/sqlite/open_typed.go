@@ -4,15 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
-// OpenTyped reuses the existing MCP Delivery Store on an already migrated
-// v3 database. Unlike legacy Open, it neither migrates a Profile delivery
-// nor installs legacy tunnel guards. The future single Runtime composer
-// must validate Tunnel authority and owner-approved activation separately.
+// OpenTyped is the only MCP Delivery Store constructor. It strictly verifies
+// the current v3 schema without migrating Profile delivery or installing old
+// Tunnel guards. The Runtime separately validates live Tunnel activation.
 func OpenTyped(ctx context.Context, path string) (*Store, error) {
-	db, err := hardcut.OpenTypedContextStore(ctx, path)
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("open typed MCP delivery: %w", err)
 	}

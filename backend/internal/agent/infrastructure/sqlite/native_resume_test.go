@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -247,30 +246,6 @@ func TestNativeResumeConcurrentReservationOnlyOneWins(t *testing.T) {
 	var count int
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_task_continuations").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("failed atomic ledger check count=%d err=%v", count, err)
-	}
-}
-
-func TestNativeResumeForwardMigrationPreservesAdmissionAndNoHiddenGrants(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "migrate.db")
-	s, err := Open(ctx, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
-	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
-		t.Fatalf("missing v15 %d %v", version, err)
-	}
-	// New action is permitted only to an explicit governance decision.
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO agent_admissions
-        (agent_id,action,principal_kind,principal_ref,origin,scope_kind,scope_ref,policy_kind,policy_reason,status,occurred_at)
-        VALUES('agent_fixture','agent.task.resume','local_user','os:fixture','cli','catalog','','deny','explicit_rejection','denied',?)`,
-		time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.db.ExecContext(ctx, "UPDATE agent_admissions SET status='admitted' WHERE action='agent.task.resume'"); err == nil {
-		t.Fatal("resume admission evidence could be rewritten")
 	}
 }
 

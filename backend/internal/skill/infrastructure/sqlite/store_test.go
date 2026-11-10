@@ -15,7 +15,7 @@ func TestStoreRoundTripStateAndDelete(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	store, err := openSkillV3(t, ctx, filepath.Join(t.TempDir(), "mender.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestStoreRejectsDuplicateSkillDigest(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	store, err := openSkillV3(t, ctx, filepath.Join(t.TempDir(), "mender.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

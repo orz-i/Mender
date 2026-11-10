@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 )
 
 func testDaytonaSandbox(t *testing.T, id sandboxdomain.ID, owner string) sandboxdomain.Sandbox {
@@ -24,7 +23,7 @@ func testDaytonaSandbox(t *testing.T, id sandboxdomain.ID, owner string) sandbox
 func TestDaytonaTemplateTransactionalQuotaAndRestart(t *testing.T) {
 	ctx := context.Background()
 	db := filepath.Join(t.TempDir(), "daytona.db")
-	runs, err := sandboxsqlite.Open(ctx, db)
+	runs, err := openSandboxV3(t, ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +116,7 @@ func TestDaytonaTemplateTransactionalQuotaAndRestart(t *testing.T) {
 func TestDaytonaTemplateRejectsWrongBackendOrInvalidConfig(t *testing.T) {
 	ctx := context.Background()
 	db := filepath.Join(t.TempDir(), "invalid.db")
-	runs, err := sandboxsqlite.Open(ctx, db)
+	runs, err := openSandboxV3(t, ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}

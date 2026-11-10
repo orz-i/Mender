@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
-// OpenTyped reuses the existing Profile Store on a pre-migrated v3 database.
-// No migration or grant creation occurs. The single F4 Runtime composer must
-// perform owner-reviewed cutover admission before activating any execution.
+// OpenTyped is the only Profile Store constructor. It requires the pinned v3
+// schema and never creates resources, grants or legacy migration tables.
 func OpenTyped(ctx context.Context, path string) (*Store, error) {
-	db, err := hardcut.OpenTypedContextStore(ctx, path)
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("open typed Profile sqlite: %w", err)
 	}

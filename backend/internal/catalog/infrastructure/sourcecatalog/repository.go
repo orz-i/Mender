@@ -13,7 +13,6 @@ import (
 
 	application "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	providersqlite "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite"
 	suite "github.com/orz-i/Mender/backend/internal/toolsuite/domain"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
 )
@@ -25,19 +24,18 @@ var ErrSourceIdentityConflict = errors.New("tool source identity conflict")
 var ErrUnverifiedSource = errors.New("tool source ownership is unverified")
 
 // OwnerVerifier is host-injected, read-only, and not derived from a Plugin or
-// a source label. Stage E additionally needs commit-point SQL ownership guards
-// for Agent Sources, so a concurrent retirement cannot race this check.
+// a source label. The pinned v3 schema enforces Agent/Provider ownership
+// at the SQL commit boundary so concurrent retirement cannot bypass it.
 type OwnerVerifier interface {
 	VerifySourceOwner(context.Context, catalog.SourceRef) error
 }
 
-// Repository consumes the proposed typed Catalog schema. It does not create,
-// upgrade or modify the schema when opened. bootstrap.Runtime never constructs
-// this adapter until Stage E's cross-context migration is in place.
+// Repository consumes only the pinned v3 Catalog schema; it neither creates
+// nor migrates tables. The official Runtime composes it after schema preflight.
 type Repository struct {
-	// Provider CRUD is the same canonical repository in v2/v3, not a second
-	// implementation or a fabricated Provider parent for Native/Agent Tools.
-	*providersqlite.ProviderRepository
+	// External Provider CRUD has its own canonical persistence contract; it
+	// never fabricates Provider parent records for native/Agent Tools.
+	*ProviderRepository
 	db    *sql.DB
 	owner OwnerVerifier
 }
@@ -55,7 +53,7 @@ func NewRepository(ctx context.Context, db *sql.DB, owner OwnerVerifier) (*Repos
 			return nil, fmt.Errorf("source catalog: typed schema unavailable: %w", err)
 		}
 	}
-	return &Repository{db: db, owner: owner, ProviderRepository: providersqlite.NewProviderRepository(db)}, nil
+	return &Repository{db: db, owner: owner, ProviderRepository: NewProviderRepository(db)}, nil
 }
 
 // UpsertSourceSnapshot upserts stable canonical ToolIDs in one transaction.

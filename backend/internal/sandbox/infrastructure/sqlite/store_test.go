@@ -24,7 +24,7 @@ func testSandbox(t *testing.T) sandboxdomain.Sandbox {
 func TestStoreRoundtripCASAndRestart(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "sandbox.db")
-	store, err := Open(ctx, path)
+	store, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestStoreRoundtripCASAndRestart(t *testing.T) {
 	if _, err := store.TransitionRun(ctx, provisioning, sandboxdomain.StateFailed, ""); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("stale generation: %v", err)
 	}
-	reopened, err := Open(ctx, path)
+	reopened, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestStoreRoundtripCASAndRestart(t *testing.T) {
 }
 func TestTransitionsCASConcurrent(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "db"))
+	store, err := openSandboxV3(t, ctx, filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestTransitionsCASConcurrent(t *testing.T) {
 func TestMigrationFutureSchemaFailsClosed(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "db")
-	store, err := Open(ctx, path)
+	store, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestMigrationFutureSchemaFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(ctx, path); err == nil {
+	if _, err := openSandboxV3(t, ctx, path); err == nil {
 		t.Fatal("future schema accepted")
 	}
 }

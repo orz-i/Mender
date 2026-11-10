@@ -5,11 +5,13 @@ import (
 	"testing"
 
 	policysqlite "github.com/orz-i/Mender/backend/internal/policy/infrastructure/sqlite"
+	v3test "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func setupApprovalPolicyFenceFixture(t *testing.T, path string) {
 	t.Helper()
-	p, err := policysqlite.Open(context.Background(), path)
+	v3test.Prepare(t, path)
+	p, err := policysqlite.OpenTyped(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
-// TypedInventory is one read-only projection of the Stage E Workspace,
+// TypedInventory is the canonical read-only projection of v3 Workspace,
 // Placement and Profile TargetScope authority. It never creates Workspaces,
 // mounts a root, activates a Sandbox or grants any tool. The caller owns the
 // v3 SQLite handle. The GuardedRouter and atomic typedlease recheck rights at
@@ -97,7 +97,7 @@ func (i *TypedInventory) ListAccessibleWorkspaces(ctx context.Context, caller go
 	return out, nil
 }
 
-// No default Workspace table exists in the Stage E approved schema. Return
+// No default Workspace binding exists in the pinned v3 schema. Return
 // none instead of inventing a host path, pin or global preference.
 func (*TypedInventory) DefaultWorkspace(context.Context, governance.Context) (workspace.Ref, bool, error) {
 	return "", false, nil

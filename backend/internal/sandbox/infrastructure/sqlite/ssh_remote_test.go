@@ -18,7 +18,7 @@ import (
 func TestSSHRemoteV11ImmutableTemplateCredentialProtectionAndPassiveLifecycle(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "ssh.db"))
+	store, err := openSandboxV3(t, ctx, filepath.Join(t.TempDir(), "ssh.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,13 +71,6 @@ func TestSSHRemoteV11ImmutableTemplateCredentialProtectionAndPassiveLifecycle(t 
 	}
 	if _, err := store.db.ExecContext(ctx, `UPDATE sandboxes SET backend_plugin_id='io.mender.sandbox.docker' WHERE id=?`, id.String()); err == nil {
 		t.Fatal("SSH plugin identity changed without authorization")
-	}
-	// In the complete Runtime, the Provider config table is composed before
-	// Sandbox lifecycle. Provide only its queried shape in this isolated store.
-	if _, err := store.db.ExecContext(ctx, `CREATE TABLE provider_configs (
-		plugin_id TEXT, plugin_installation_id TEXT, config_version INTEGER, config_json TEXT
-	)`); err != nil {
-		t.Fatal(err)
 	}
 	for _, action := range []gov.Action{gov.ActionSandboxStop, gov.ActionSandboxStart, gov.ActionSandboxDestroy} {
 		previous, err := store.GetRun(ctx, id)

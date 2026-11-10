@@ -17,8 +17,8 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	store := openTestStore(t)
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("default")
-	first, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
-	second, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000002")
+	first, _ := catalogdomain.ParseToolID("tool_882fb9c25db58744f34da684f7f7ab5f")
+	second, _ := catalogdomain.ParseToolID("tool_33a65e204e96265604efddd7536eabd9")
 
 	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first})
 	if err != nil {
@@ -104,7 +104,7 @@ func TestProfileSlugConflict(t *testing.T) {
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 
-	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "mender.db"))
+	store, err := openProfileV3(t, context.Background(), filepath.Join(t.TempDir(), "mender.db"))
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

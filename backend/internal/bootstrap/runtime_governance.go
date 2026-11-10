@@ -28,10 +28,10 @@ func NewRuntimeGovernance(
 	databasePath string,
 ) (*RuntimeGovernance, error) {
 	processIsolation := runtimeprocessisolation.New()
-	defaultIsolation := runtimegovernancedomain.DefaultIsolation(
-		processIsolation.Info().RestrictedHostAvailable,
-	)
-	store, err := runtimegovernancesqlite.Open(ctx, databasePath, defaultIsolation)
+	// The pinned v3 image contains the reviewed initial isolation Policy.
+	// Machine-specific availability is checked when an action executes,
+	// never by mutating a persisted choice during Runtime startup.
+	store, err := runtimegovernancesqlite.Open(ctx, databasePath)
 	if err != nil {
 		return nil, fmt.Errorf("compose runtime governance: %w", err)
 	}

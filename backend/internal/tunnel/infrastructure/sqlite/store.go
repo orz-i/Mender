@@ -5,13 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 	_ "modernc.org/sqlite"
@@ -21,42 +19,14 @@ type Store struct {
 	db *sql.DB
 }
 
+// Open is the only Tunnel Store constructor. It verifies the pinned v3
+// schema and never upgrades, backs up, imports or rebinds legacy Tunnels.
 func Open(ctx context.Context, path string) (*Store, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("open tunnel sqlite: path must not be empty")
-	}
-	absolute, err := filepath.Abs(path)
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("open tunnel sqlite: resolve path: %w", err)
+		return nil, fmt.Errorf("open Tunnel sqlite: %w", err)
 	}
-	slashed := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(slashed, "/") {
-		slashed = "/" + slashed
-	}
-	u := url.URL{Scheme: "file", Path: slashed}
-	query := u.Query()
-	query.Add("_pragma", "foreign_keys(1)")
-	query.Add("_pragma", "busy_timeout(5000)")
-	u.RawQuery = query.Encode()
-
-	db, err := sql.Open("sqlite", u.String())
-	if err != nil {
-		return nil, fmt.Errorf("open tunnel sqlite: %w", err)
-	}
-	store := &Store{db: db}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open tunnel sqlite: ping: %w", err)
-	}
-	if err := backupPreTunnelHardCut(ctx, db, absolute); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open tunnel sqlite: pre-upgrade backup: %w", err)
-	}
-	if err := migrate(ctx, db); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open tunnel sqlite: migrate: %w", err)
-	}
-	return store, nil
+	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error {
@@ -211,41 +181,6 @@ func scanTunnel(scanner rowScanner) (tunneldomain.Tunnel, error) {
 		externalID,
 		ref,
 	)
-}
-
-// backupPreTunnelHardCut produces a WAL-consistent snapshot before the
-// forward-only v1/v2→v3 exact extension binding migration.
-func backupPreTunnelHardCut(ctx context.Context, db *sql.DB, path string) error {
-	var count int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tunnel_schema_migrations'").Scan(&count); err != nil {
-		return err
-	}
-	if count == 0 {
-		return nil
-	}
-	var version sql.NullInt64
-	if err := db.QueryRowContext(ctx, "SELECT MAX(version) FROM tunnel_schema_migrations").Scan(&version); err != nil {
-		return err
-	}
-	if !version.Valid || version.Int64 >= latestSupportedVersion {
-		return nil
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".mender-tunnel-pre-v3-*.db")
-	if err != nil {
-		return err
-	}
-	backup := f.Name()
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Remove(backup); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", backup); err != nil {
-		_ = os.Remove(backup)
-		return err
-	}
-	return nil
 }
 
 // All Tunnel resources hold immutable installation references, including

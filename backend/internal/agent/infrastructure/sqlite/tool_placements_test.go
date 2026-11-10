@@ -10,9 +10,9 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
-func TestOptionalToolPlacementV11ExactRootAndDisable(t *testing.T) {
+func TestOptionalToolPlacementV3ExactRootAndDisable(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "placement-v11.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "placement-v3.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +86,8 @@ func TestOptionalToolPlacementV11ExactRootAndDisable(t *testing.T) {
 		t.Fatalf("placement inventory still present %+v %v", got, err)
 	}
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
-		t.Fatalf("expected current Agent v13: %d %v", version, err)
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 20 {
+		t.Fatalf("expected current typed v3 Agent schema: %d %v", version, err)
 	}
 }
 func TestToolPlacementRejectsInvalidToolIDsAndAliases(t *testing.T) {

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 const retiredInventorySchema = `
@@ -32,6 +34,7 @@ func TestRetiredProviderInventoryFailsClosedAndPreservesOriginalRows(t *testing.
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "mender.db")
 			if mode == "mixed-old-and-modern" {
+				v3fixture.Prepare(t, path)
 				modern, err := Open(ctx, path)
 				if err != nil {
 					t.Fatal(err)
@@ -77,8 +80,8 @@ func TestRetiredProviderInventoryFailsClosedAndPreservesOriginalRows(t *testing.
 				_ = store.Close()
 				t.Fatal("silently imported unsupported Provider-v1 installation inventory")
 			}
-			if !strings.Contains(err.Error(), "retired Provider v1 inventory/schema is unsupported") {
-				t.Fatalf("retired inventory rejected without actionable diagnostic: %v", err)
+			if mode == "mixed-old-and-modern" && !strings.Contains(err.Error(), "legacy facade table still present") {
+				t.Fatalf("mixed schema with retired Provider inventory accepted: %v", err)
 			}
 			verify, err := sql.Open("sqlite", path)
 			if err != nil {

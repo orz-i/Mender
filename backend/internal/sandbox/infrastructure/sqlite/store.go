@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,47 +15,8 @@ import (
 )
 
 // Store owns only Sandbox tables; it does not reach into Provider persistence.
-type Store struct {
-	db    *sql.DB
-	typed bool // set only by the explicit, strictly validated v3 constructor
-}
+type Store struct{ db *sql.DB }
 
-func Open(ctx context.Context, path string) (*Store, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("open sandbox sqlite: missing path")
-	}
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return nil, fmt.Errorf("open sandbox sqlite: %w", err)
-	}
-	slashed := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(slashed, "/") {
-		slashed = "/" + slashed
-	}
-	u := url.URL{Scheme: "file", Path: slashed}
-	query := u.Query()
-	query.Add("_pragma", "foreign_keys(1)")
-	query.Add("_pragma", "busy_timeout(5000)")
-	u.RawQuery = query.Encode()
-	db, err := sql.Open("sqlite", u.String())
-	if err != nil {
-		return nil, fmt.Errorf("open sandbox sqlite: %w", err)
-	}
-	db.SetMaxOpenConns(1)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open sandbox sqlite ping: %w", err)
-	}
-	if err := backupPreSandboxUpgrade(ctx, db, absolute); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open sandbox sqlite: pre-binding backup: %w", err)
-	}
-	if err := migrate(ctx, db); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	return &Store{db: db}, nil
-}
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
@@ -215,49 +173,6 @@ func (s *Store) CreateReady(ctx context.Context, item sandboxdomain.Sandbox, run
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create ready sandbox: commit: %w", err)
-	}
-	return nil
-}
-
-// backupPreSandboxUpgrade creates a WAL-consistent snapshot before the
-// forward-only v8/v9 -> v10 schema hard cut. An already-current database is
-// never snapshotted again, and an unsupported future schema never downgraded.
-func backupPreSandboxUpgrade(ctx context.Context, db *sql.DB, path string) error {
-	var present int
-	if err := db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sandbox_schema_migrations'").Scan(&present); err != nil {
-		return err
-	}
-	if present == 0 {
-		return nil
-	}
-	var version sql.NullInt64
-	if err := db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil {
-		return err
-	}
-	if !version.Valid || version.Int64 >= latestSchemaVersion {
-		return nil
-	}
-	prefix := ".mender-sandbox-v8-backup-*.db"
-	if version.Int64 >= 10 {
-		prefix = ".mender-sandbox-v10-backup-*.db"
-	} else if version.Int64 >= 9 {
-		prefix = ".mender-sandbox-v9-backup-*.db"
-	}
-	file, err := os.CreateTemp(filepath.Dir(path), prefix)
-	if err != nil {
-		return err
-	}
-	destination := file.Name()
-	if err = file.Close(); err != nil {
-		return err
-	}
-	if err = os.Remove(destination); err != nil {
-		return err
-	}
-	if _, err = db.ExecContext(ctx, "VACUUM INTO ?", destination); err != nil {
-		_ = os.Remove(destination)
-		return fmt.Errorf("sandbox SQLite consistent backup: %w", err)
 	}
 	return nil
 }

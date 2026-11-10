@@ -107,7 +107,7 @@ func dockerProvisionFixture(t *testing.T) (*Provisioner, *sandboxsqlite.Store, *
 	t.Helper()
 	ctx := context.Background()
 	db := filepath.Join(t.TempDir(), "docker-staging.db")
-	store, err := sandboxsqlite.Open(ctx, db)
+	store, err := openSandboxV3(t, ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestDockerUnknownRunReconcilesAfterRestartUsingPersistedTemplate(t *testing
 		t.Fatalf("unreconciled run %+v %v", unknown, err)
 	}
 	// Open independent repositories, mimicking a fresh Mender Runtime process.
-	restartedRuns, err := sandboxsqlite.Open(ctx, path)
+	restartedRuns, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

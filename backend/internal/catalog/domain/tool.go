@@ -215,10 +215,9 @@ func (t Tool) ID() ToolID {
 // SourceRef returns the exact immutable Tool provenance; it is never a grant.
 func (t Tool) SourceRef() SourceRef { return t.source }
 
-// ProviderID is a compatibility accessor for the **currently deployed**
-// Provider-backed routes, until the atomic E/F cut replaces all consumers.
-// Non-Provider sources have no ProviderID; the old executor fails closed on
-// that absence, and Stage D does not register such Tools in the live Catalog.
+// ProviderID is defined only for an actual external Provider source.
+// Agent-owned and native Tools have no ProviderID and return the empty value;
+// callers must use SourceRef for identity and governance.
 func (t Tool) ProviderID() ProviderID {
 	if t.source.Kind() != SourceProvider {
 		return ""

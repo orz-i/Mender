@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
 
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -22,39 +21,14 @@ type Store struct {
 	db *sql.DB
 }
 
-// Open opens the plugin installation store and applies forward-only migrations.
+// Open verifies the sole pinned v3 schema before exposing external Plugin
+// installation metadata. It cannot repair/import Provider-v1 inventories.
 func Open(ctx context.Context, path string) (*Store, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("open plugin installation sqlite: path must not be empty")
-	}
-	absolute, err := filepath.Abs(path)
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("open plugin installation sqlite: resolve path: %w", err)
+		return nil, fmt.Errorf("open Plugin Installation sqlite: %w", err)
 	}
-	slashed := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(slashed, "/") {
-		slashed = "/" + slashed
-	}
-	u := url.URL{Scheme: "file", Path: slashed}
-	query := u.Query()
-	query.Add("_pragma", "foreign_keys(1)")
-	query.Add("_pragma", "busy_timeout(5000)")
-	u.RawQuery = query.Encode()
-
-	db, err := sql.Open("sqlite", u.String())
-	if err != nil {
-		return nil, fmt.Errorf("open plugin installation sqlite: %w", err)
-	}
-	store := &Store{db: db}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open plugin installation sqlite: ping: %w", err)
-	}
-	if err := migrate(ctx, db); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open plugin installation sqlite: migrate: %w", err)
-	}
-	return store, nil
+	return &Store{db: db}, nil
 }
 
 // Close releases the SQLite connection.

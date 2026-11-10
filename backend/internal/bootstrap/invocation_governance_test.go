@@ -2,11 +2,14 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
 	"time"
+
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -19,7 +22,9 @@ func TestInvocationGovernanceFactsUseReviewedBuiltInExtractorWithoutActivation(t
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := providerconfigstore.Open(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	path := filepath.Join(t.TempDir(), "mender.db")
+	v3fixture.Prepare(t, path)
+	store, err := providerconfigstore.OpenTyped(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,6 +37,7 @@ func TestInvocationGovernanceFactsUseReviewedBuiltInExtractorWithoutActivation(t
 	}
 
 	providerID := mustGovernanceProviderID(t, "prov_00000000000000000000000000000031")
+	seedProviderTestOwner(t, path, providerID)
 	config, err := providerplugin.NewConfiguration(
 		providerID,
 		plugin.Descriptor().ID,
@@ -83,7 +89,9 @@ func TestInvocationGovernanceFactsRemainUnknownWithoutReviewedBuiltInExtractor(t
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := providerconfigstore.Open(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	path := filepath.Join(t.TempDir(), "mender.db")
+	v3fixture.Prepare(t, path)
+	store, err := providerconfigstore.OpenTyped(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +117,9 @@ func TestInvocationGovernanceFactsDoNotTrustExternalInstallations(t *testing.T) 
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := providerconfigstore.Open(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	path := filepath.Join(t.TempDir(), "mender.db")
+	v3fixture.Prepare(t, path)
+	store, err := providerconfigstore.OpenTyped(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +137,7 @@ func TestInvocationGovernanceFactsDoNotTrustExternalInstallations(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	seedProviderTestOwner(t, path, providerID)
 	config, err := providerplugin.NewInstalledConfiguration(
 		providerID,
 		plugin.Descriptor().ID,
@@ -291,5 +302,19 @@ func TestLegacyInvocationFactExtractorRejectsUncomposedTypedSources(t *testing.T
 				t.Fatal("legacy Provider-v2 Runtime accepted uncomposed Agent/native source")
 			}
 		})
+	}
+}
+
+func seedProviderTestOwner(t *testing.T, path string, id catalogdomain.ProviderID) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO providers(id,namespace,display_name,description,created_at,updated_at) VALUES(?,?,?,?,?,?)`,
+		id.String(), id.String(), "Provider", "", "2026-11-09T00:00:00Z", "2026-11-09T00:00:00Z")
+	if err != nil {
+		t.Fatal(err)
 	}
 }

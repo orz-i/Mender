@@ -9,7 +9,6 @@ import (
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	"github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
@@ -87,7 +86,7 @@ func newFixtureService(t *testing.T, run Executor) (*Service, gov.Context) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "agents.db")
 	requireApprovalFixturePolicy(t, dbPath)
-	s, err := agentsqlite.Open(context.Background(), dbPath)
+	s, err := openAgentV3(t, context.Background(), dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +190,7 @@ func TestServiceCompletionAndPolicyPreflight(t *testing.T) {
 	}
 }
 func TestServiceDeniedPolicyNeverStartsRunner(t *testing.T) {
-	store, err := agentsqlite.Open(context.Background(), filepath.Join(t.TempDir(), "agents.db"))
+	store, err := openAgentV3(t, context.Background(), filepath.Join(t.TempDir(), "agents.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

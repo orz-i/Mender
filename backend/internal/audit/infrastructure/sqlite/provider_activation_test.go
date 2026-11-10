@@ -3,10 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"slices"
 	"testing"
 	"time"
+
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -17,7 +18,7 @@ import (
 func TestProviderActivationAuditRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "audit.db"))
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestProviderActivationAuditRoundTrip(t *testing.T) {
 func TestProviderActivationAuditSchemaContainsNoSecretOrConfigPayloads(t *testing.T) {
 	t.Parallel()
 
-	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "audit.db"))
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}

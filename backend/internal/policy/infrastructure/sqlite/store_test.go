@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -64,13 +64,23 @@ func TestPolicyRuleRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The v3 Policy authority checks real Profile/Provider/Tool references at
+	// the commit point. Seed one valid owner and use an existing native ToolID.
+	for _, record := range []string{
+		`INSERT INTO profiles(id,slug,display_name,revision) VALUES('prof_00000000000000000000000000000001','policy-test','Policy fixture',0)`,
+		`INSERT INTO providers(id,namespace,display_name,description,created_at,updated_at) VALUES('prov_00000000000000000000000000000001','policy-source','Policy source','','2026-11-09T00:00:00Z','2026-11-09T00:00:00Z')`,
+	} {
+		if _, err := store.db.ExecContext(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
 	match, err := policydomain.NewMatch(policydomain.MatchSpec{
 		Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
 		Origins:       []governancedomain.Origin{governancedomain.OriginMCP},
 		ScopeKinds:    []governancedomain.ScopeKind{governancedomain.ScopeProfile},
 		ProfileRefs:   []string{"prof_00000000000000000000000000000001"},
 		ProviderIDs:   []string{"prov_00000000000000000000000000000001"},
-		ToolIDs:       []string{"tool_00000000000000000000000000000001"},
+		ToolIDs:       []string{"tool_882fb9c25db58744f34da684f7f7ab5f"},
 		FactKnowledge: policydomain.FactKnown,
 		EffectsAny:    []string{"filesystem.write"},
 		ResourcesAny:  []policydomain.ResourceMatcher{resource},
@@ -196,35 +206,23 @@ func TestCreateRuleMapsDuplicateToConflict(t *testing.T) {
 	}
 }
 
-func TestOpenRejectsFuturePolicySchemaVersion(t *testing.T) {
+func TestOpenTypedRejectsFuturePolicySchemaVersion(t *testing.T) {
 	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "mender.db")
+	path := v3fixture.EmptyDatabase(t)
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`CREATE TABLE policy_schema_migrations (
-		version INTEGER PRIMARY KEY,
-		applied_at TEXT NOT NULL
-	)`); err != nil {
+	defer func() { _ = db.Close() }()
+	if _, err = db.ExecContext(context.Background(), `INSERT INTO policy_schema_migrations(version,applied_at) VALUES(999,'future')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(
-		"INSERT INTO policy_schema_migrations(version, applied_at) VALUES (99, 'future')",
-	); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	store, err := Open(context.Background(), path)
+	store, err := OpenTyped(context.Background(), path)
 	if store != nil {
 		_ = store.Close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "newer than supported version") {
-		t.Fatalf("Open() error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "expected version 4") {
+		t.Fatalf("typed Policy accepted future version: %v", err)
 	}
 }
 
@@ -285,10 +283,7 @@ func TestPolicyRestoreFailsClosedOnMalformedMatch(t *testing.T) {
 
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	store, err := Open(
-		context.Background(),
-		filepath.Join(t.TempDir(), "mender.db"),
-	)
+	store, err := OpenTyped(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}

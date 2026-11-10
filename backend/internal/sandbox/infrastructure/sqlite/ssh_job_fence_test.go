@@ -15,7 +15,7 @@ func newFencedSSHFixture(t *testing.T) (string, sandboxdomain.ID, sandboxdomain.
 	t.Helper()
 	ctx := context.Background()
 	filename := filepath.Join(t.TempDir(), "job-fence.sqlite")
-	store, err := Open(ctx, filename)
+	store, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,11 +41,6 @@ func newFencedSSHFixture(t *testing.T) (string, sandboxdomain.ID, sandboxdomain.
 	if err := store.CreateReady(ctx, item, run); err != nil {
 		t.Fatal(err)
 	}
-	// The isolated store has no Provider catalogue. The existing lifecycle
-	// guard queries this shape only for a Sandbox Destroy.
-	if _, err := store.db.ExecContext(ctx, `CREATE TABLE provider_configs(provider_id TEXT,plugin_id TEXT,plugin_installation_id TEXT,config_version INTEGER,config_json TEXT)`); err != nil {
-		t.Fatal(err)
-	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -54,12 +49,12 @@ func newFencedSSHFixture(t *testing.T) (string, sandboxdomain.ID, sandboxdomain.
 func TestSSHJobLifecycleFenceAtomicAcrossRuntimes(t *testing.T) {
 	filename, id, run, caller := newFencedSSHFixture(t)
 	ctx := context.Background()
-	first, err := Open(ctx, filename)
+	first, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = first.Close() }()
-	second, err := Open(ctx, filename)
+	second, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,11 +142,11 @@ func TestSSHJobFirstSubmitRacesPassiveStopAcrossRuntimes(t *testing.T) {
 	for iteration := 0; iteration < 12; iteration++ {
 		filename, id, run, caller := newFencedSSHFixture(t)
 		ctx := context.Background()
-		first, err := Open(ctx, filename)
+		first, err := openSandboxV3(t, ctx, filename)
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := Open(ctx, filename)
+		second, err := openSandboxV3(t, ctx, filename)
 		if err != nil {
 			_ = first.Close()
 			t.Fatal(err)
@@ -209,7 +204,7 @@ func TestSSHJobFirstSubmitRacesPassiveStopAcrossRuntimes(t *testing.T) {
 func TestSSHJobFenceAuthorizationAndNoEnrolledFalsePositive(t *testing.T) {
 	filename, id, run, owner := newFencedSSHFixture(t)
 	ctx := context.Background()
-	store, err := Open(ctx, filename)
+	store, err := openSandboxV3(t, ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}

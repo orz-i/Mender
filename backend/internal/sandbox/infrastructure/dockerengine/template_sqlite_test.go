@@ -15,7 +15,7 @@ func dockerTemplateFixture(t *testing.T) (context.Context, string, *sandboxsqlit
 	t.Helper()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mender-docker-template.db")
-	resources, err := sandboxsqlite.Open(ctx, path)
+	resources, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -181,8 +181,7 @@ func (s *Store) ReplaceProfileGrants(ctx context.Context, id sandboxdomain.ID, p
 			// An explicitly retired capability permanently invalidates any
 			// Profile Tool TargetScopes it previously admitted. Regranting a
 			// Sandbox later must never resurrect those old execution targets.
-			if s.typed {
-				_, err = tx.ExecContext(ctx, `DELETE FROM profile_tool_target_scopes WHERE sandbox_id=? AND profile_id=? AND tool_id IN (
+			_, err = tx.ExecContext(ctx, `DELETE FROM profile_tool_target_scopes WHERE sandbox_id=? AND profile_id=? AND tool_id IN (
                 SELECT id FROM tools WHERE source_kind='native' AND
                   CASE source_key
                     WHEN 'workspace.read' THEN 'file.read'
@@ -195,9 +194,8 @@ func (s *Store) ReplaceProfileGrants(ctx context.Context, id sandboxdomain.ID, p
                     WHEN 'jobs.result' THEN 'job.observe'
                     WHEN 'jobs.cancel' THEN 'job.cancel'
                   END=?)`, id.String(), profileID, string(capability))
-				if err != nil {
-					return fmt.Errorf("replace Sandbox Profile grants: retire Tool target scopes: %w", err)
-				}
+			if err != nil {
+				return fmt.Errorf("replace Sandbox Profile grants: retire Tool target scopes: %w", err)
 			}
 			_, err = tx.ExecContext(ctx, "DELETE FROM sandbox_profile_grants WHERE sandbox_id=? AND profile_id=? AND capability=?", id.String(), profileID, string(capability))
 		}

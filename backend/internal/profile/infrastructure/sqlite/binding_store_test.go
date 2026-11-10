@@ -16,7 +16,7 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 	store := openTestStore(t)
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000011")
 	slug, _ := profiledomain.NewSlug("governed")
-	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000011")
+	toolID, _ := catalogdomain.ParseToolID("tool_4ba8e255e6486aa5a425f8e87b348ded")
 	credentialRef, _ := credentialdomain.NewReference("github", "work")
 
 	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
@@ -71,7 +71,7 @@ func TestProfileRestoreFailsClosedOnMalformedBindingState(t *testing.T) {
 	store := openTestStore(t)
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000012")
 	slug, _ := profiledomain.NewSlug("malformed")
-	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000012")
+	toolID, _ := catalogdomain.ParseToolID("tool_1f28bd14ee01b125dcda89402b892ca9")
 
 	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID})
 	if err != nil {

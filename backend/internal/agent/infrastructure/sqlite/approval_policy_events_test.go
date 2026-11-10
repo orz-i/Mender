@@ -11,7 +11,7 @@ import (
 
 func TestOwnerApprovalModeChangesLeaveImmutableAuditEvents(t *testing.T) {
 	ctx := context.Background()
-	db, err := Open(ctx, filepath.Join(t.TempDir(), "policy-events.db"))
+	db, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "policy-events.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

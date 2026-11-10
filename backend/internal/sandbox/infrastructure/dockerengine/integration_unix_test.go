@@ -18,7 +18,7 @@ import (
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 	workspaceapplication "github.com/orz-i/Mender/backend/internal/workspace/application"
 	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
@@ -40,12 +40,13 @@ func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := filepath.Join(t.TempDir(), "docker-live.db")
-	providers, err := providerconfigstore.Open(ctx, db)
+	v3fixture.Prepare(t, db)
+	providers, err := providerconfigstore.OpenTyped(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = providers.Close() }()
-	store, err := sandboxsqlite.Open(ctx, db)
+	store, err := openSandboxV3(t, ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}

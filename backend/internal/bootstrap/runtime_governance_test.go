@@ -2,17 +2,14 @@ package bootstrap
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func TestRuntimeGovernanceRejectsRestrictedHostWhenBackendUnavailable(t *testing.T) {
-	governance, err := NewRuntimeGovernance(
-		context.Background(),
-		filepath.Join(t.TempDir(), "mender.db"),
-	)
+	governance, err := NewRuntimeGovernance(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,13 +28,10 @@ func TestRuntimeGovernanceRejectsRestrictedHostWhenBackendUnavailable(t *testing
 	}
 }
 
-func TestRuntimeGovernanceInitialIsolationFollowsBackendAvailability(t *testing.T) {
+func TestRuntimeGovernancePinnedIsolationNeverDowngradesToHost(t *testing.T) {
 	t.Parallel()
 
-	governance, err := NewRuntimeGovernance(
-		context.Background(),
-		filepath.Join(t.TempDir(), "mender.db"),
-	)
+	governance, err := NewRuntimeGovernance(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,10 +41,10 @@ func TestRuntimeGovernanceInitialIsolationFollowsBackendAvailability(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedWorkspace := runtimegovernancedomain.IsolationHost
-	if governance.processIsolation.Info().RestrictedHostAvailable {
-		expectedWorkspace = runtimegovernancedomain.IsolationRestrictedHost
-	}
+	// A persistent, reviewed restricted_host choice must never be weakened
+	// because the backend is absent on the current machine. Execution rejects
+	// unavailable isolation rather than mutating the stored authority.
+	expectedWorkspace := runtimegovernancedomain.IsolationRestrictedHost
 	if isolation.WorkspaceShell() != expectedWorkspace {
 		t.Fatalf(
 			"workspace isolation = %q, want %q (backend=%+v)",

@@ -4,13 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
-	"path/filepath"
-	"strings"
 	"time"
 
 	runtimegovernanceapplication "github.com/orz-i/Mender/backend/internal/runtimegovernance/application"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -18,34 +16,14 @@ type Store struct {
 	db *sql.DB
 }
 
-func Open(
-	ctx context.Context,
-	path string,
-	defaultIsolation runtimegovernancedomain.Isolation,
-) (*Store, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("open runtime governance sqlite: path must not be empty")
-	}
-	absolute, err := filepath.Abs(path)
+// Open verifies the sole pinned v3 schema; persisted Runtime budgets and
+// isolation decisions are never rewritten by a platform-dependent default.
+func Open(ctx context.Context, path string) (*Store, error) {
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("open runtime governance sqlite: absolute path: %w", err)
+		return nil, fmt.Errorf("open Runtime governance sqlite: %w", err)
 	}
-	slashed := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(slashed, "/") {
-		slashed = "/" + slashed
-	}
-	dsn := (&url.URL{Scheme: "file", Path: slashed}).String() + "?_pragma=busy_timeout(5000)"
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("open runtime governance sqlite: %w", err)
-	}
-	db.SetMaxOpenConns(1)
-	store := &Store{db: db}
-	if err := migrate(ctx, db, defaultIsolation); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	return store, nil
+	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error {

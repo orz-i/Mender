@@ -4,19 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"slices"
 	"testing"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func TestStoreRoundTripListAndDelete(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
+	// A canonical v3 Provider Config must never be created without its owner.
+	seedProviderConfigOwner(t, store)
+
 	first := testConfiguration(
 		t,
 		"prov_00000000000000000000000000000021",
@@ -78,6 +81,9 @@ func TestStoreLoadsHistoricalSensitiveConfigButRejectsResave(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
+	// A canonical v3 Provider Config must never be created without its owner.
+	seedProviderConfigOwner(t, store)
+
 	providerID, err := catalogdomain.ParseProviderID(
 		"prov_00000000000000000000000000000029",
 	)
@@ -121,6 +127,9 @@ func TestStoreRoundTripsNormalizedConfigMetadata(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
+	// A canonical v3 Provider Config must never be created without its owner.
+	seedProviderConfigOwner(t, store)
+
 	config := testConfiguration(
 		t,
 		"prov_00000000000000000000000000000027",
@@ -166,6 +175,9 @@ func TestStoreRoundTripsExternalInstallationPin(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
+	// A canonical v3 Provider Config must never be created without its owner.
+	seedProviderConfigOwner(t, store)
+
 	providerID, err := catalogdomain.ParseProviderID(
 		"prov_00000000000000000000000000000026",
 	)
@@ -211,6 +223,9 @@ func TestProviderConfigSchemaIsProtocolAgnostic(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
+	// A canonical v3 Provider Config must never be created without its owner.
+	seedProviderConfigOwner(t, store)
+
 	rows, err := store.db.QueryContext(
 		context.Background(),
 		"PRAGMA table_info(provider_configs)",
@@ -276,10 +291,7 @@ func TestProviderConfigSchemaIsProtocolAgnostic(t *testing.T) {
 
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	store, err := Open(
-		context.Background(),
-		filepath.Join(t.TempDir(), "mender.db"),
-	)
+	store, err := OpenTyped(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -289,6 +301,17 @@ func openTestStore(t *testing.T) *Store {
 		}
 	})
 	return store
+}
+
+func seedProviderConfigOwner(t *testing.T, store *Store) {
+	t.Helper()
+	for _, id := range []string{"prov_00000000000000000000000000000021", "prov_00000000000000000000000000000022", "prov_00000000000000000000000000000026", "prov_00000000000000000000000000000027", "prov_00000000000000000000000000000029"} {
+		_, err := store.db.ExecContext(context.Background(), `INSERT INTO providers(id,namespace,display_name,description,created_at,updated_at)
+    VALUES(?,?,?,?,?,?)`, id, id, id, "", "2026-11-09T00:00:00Z", "2026-11-09T00:00:00Z")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func testConfiguration(

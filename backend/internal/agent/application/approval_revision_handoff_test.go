@@ -10,7 +10,6 @@ import (
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	policysqlite "github.com/orz-i/Mender/backend/internal/policy/infrastructure/sqlite"
@@ -27,12 +26,13 @@ func TestApprovalPolicyRevisionFencesStaleAutoAndOwnerDecisions(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "fenced-permission.db")
-			policies, err := policysqlite.Open(ctx, path)
+			requireApprovalFixturePolicy(t, path)
+			policies, err := policysqlite.OpenTyped(ctx, path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer func() { _ = policies.Close() }()
-			store, err := agentsqlite.Open(ctx, path)
+			store, err := openAgentV3(t, ctx, path)
 			if err != nil {
 				t.Fatal(err)
 			}

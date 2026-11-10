@@ -13,7 +13,7 @@ import (
 func TestAgentAdmissionAuditIsImmutableAndDataMinimized(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agent-audit.db")
-	store, err := Open(ctx, path)
+	store, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestAgentAdmissionAuditIsImmutableAndDataMinimized(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(ctx, path)
+	reopened, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

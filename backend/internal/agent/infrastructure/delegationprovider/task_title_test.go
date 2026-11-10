@@ -11,7 +11,6 @@ import (
 	agentapp "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentworkspace "github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapp "github.com/orz-i/Mender/backend/internal/invocation/application"
@@ -21,7 +20,7 @@ import (
 
 func TestDelegateExplicitTaskTitleEndToEndWithoutPersistingPrompt(t *testing.T) {
 	ctx := context.Background()
-	store, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "agent.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "agent.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

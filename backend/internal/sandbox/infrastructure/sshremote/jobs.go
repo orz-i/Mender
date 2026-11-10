@@ -82,7 +82,7 @@ type JobRunner interface {
 }
 
 // Jobs is the built-in SSH backend's PRIVATE task engine. A caller must first
-// acquire an exact, governed Sandbox session. Stage B provides no Tool or
+// acquire an exact, governed Sandbox session. The canonical Sandbox Tool source does not itself grant a Tool or
 // external HTTP/CLI dispatch path and does not grant Profile job privileges.
 type Jobs struct {
 	sandboxID sandboxdomain.ID

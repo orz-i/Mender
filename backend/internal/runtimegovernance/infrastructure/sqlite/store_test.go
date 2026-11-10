@@ -2,20 +2,16 @@ package sqlite
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 func TestStorePersistsRestrictedIsolationWithoutDefaultFallback(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "runtime.db")
-	store, err := Open(
-		context.Background(),
-		path,
-		runtimegovernancedomain.DefaultIsolation(false),
-	)
+	path := v3fixture.EmptyDatabase(t)
+	store, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,11 +34,7 @@ func TestStorePersistsRestrictedIsolationWithoutDefaultFallback(t *testing.T) {
 
 	// Reopening with a host-only default must not rewrite a persisted
 	// restricted_host choice. Backend availability is enforced at execution.
-	reopened, err := Open(
-		context.Background(),
-		path,
-		runtimegovernancedomain.DefaultIsolation(false),
-	)
+	reopened, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,12 +50,8 @@ func TestStorePersistsRestrictedIsolationWithoutDefaultFallback(t *testing.T) {
 
 func TestStoreDefaultsAndUpdatesBudget(t *testing.T) {
 	t.Parallel()
-	defaultIsolation := runtimegovernancedomain.DefaultIsolation(false)
-	store, err := Open(
-		context.Background(),
-		filepath.Join(t.TempDir(), "runtime.db"),
-		defaultIsolation,
-	)
+	defaultIsolation := runtimegovernancedomain.DefaultIsolation(true)
+	store, err := Open(context.Background(), v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,18 +114,22 @@ func TestStoreDefaultsAndUpdatesBudget(t *testing.T) {
 // Existing operators may have deliberately permitted native Provider plugins
 // to run with host privileges. Upgrading to the safer fresh default must not
 // silently rewrite their persisted choice or restart those processes.
-func TestStorePreservesLegacyHostProviderAfterSaferDefault(t *testing.T) {
+func TestStorePreservesExplicitHostIsolationAcrossRestart(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "runtime.db")
-	first, err := Open(ctx, path, runtimegovernancedomain.DefaultIsolation(false))
+	path := v3fixture.EmptyDatabase(t)
+	first, err := Open(ctx, path)
 	if err != nil {
+		t.Fatal(err)
+	}
+	selected := runtimegovernancedomain.DefaultIsolation(false)
+	if err := first.SetIsolation(ctx, selected); err != nil {
 		t.Fatal(err)
 	}
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	second, err := Open(ctx, path, runtimegovernancedomain.DefaultIsolation(true))
+	second, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,39 +3,31 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
-func TestOpenRejectsFutureAuditSchemaVersion(t *testing.T) {
+func TestAuditV3RejectsFutureSchemaVersion(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "mender.db")
+	path := v3fixture.EmptyDatabase(t)
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`CREATE TABLE audit_schema_migrations (
-		version INTEGER PRIMARY KEY,
-		applied_at TEXT NOT NULL
-	)`); err != nil {
+	if _, err = db.Exec(`INSERT INTO audit_schema_migrations(version,applied_at) VALUES(999,'future')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(
-		"INSERT INTO audit_schema_migrations(version, applied_at) VALUES (99, 'future')",
-	); err != nil {
+	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
 	store, err := Open(context.Background(), path)
 	if store != nil {
 		_ = store.Close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "newer than supported version") {
+	if err == nil || !strings.Contains(err.Error(), "expected version 5") {
 		t.Fatalf("Open() error = %v, want future schema rejection", err)
 	}
 }

@@ -1,6 +1,6 @@
-// Package typedlease is a future-only atomic native Workspace lease
-// reservation for ADR-0064. It never opens a process or Sandbox backend,
-// and is NOT wired to the current bootstrap Runtime.
+// Package typedlease implements the atomic native Workspace lease
+// reservation wired into the official v3 Runtime. It only persists admission;
+// it never starts a process or directly executes a Sandbox backend.
 package typedlease
 
 import (
@@ -33,7 +33,7 @@ type AdmissionVerifier interface {
 
 // Store shares the same physical SQLite database as the existing Sandbox
 // durable lease table. No duplicate lease ledger or scheduler is introduced.
-// It can ONLY be constructed against the Stage E target schema.
+// It can only be constructed against the fully validated v3 schema.
 type Store struct {
 	db       *sql.DB
 	verifier AdmissionVerifier

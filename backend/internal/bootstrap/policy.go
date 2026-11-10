@@ -27,21 +27,6 @@ type Policies struct {
 	store *policysqlite.Store
 }
 
-func NewPolicies(
-	ctx context.Context,
-	databasePath string,
-	catalog *Catalog,
-	profiles *Profiles,
-) (*Policies, error) {
-	store, err := policysqlite.Open(ctx, databasePath)
-	if err != nil {
-		return nil, fmt.Errorf("compose policy: %w", err)
-	}
-	return composePolicies(store, catalog, profiles), nil
-}
-
-// NewTypedPolicies keeps one canonical Policy evaluator and rule manager.
-// It requires a fully upgraded v3 database and does not migrate or reset rules.
 func NewTypedPolicies(ctx context.Context, databasePath string, catalog *Catalog, profiles *Profiles) (*Policies, error) {
 	store, err := policysqlite.OpenTyped(ctx, databasePath)
 	if err != nil {

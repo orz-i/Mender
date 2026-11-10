@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	router "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfig "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	v3fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v3"
 )
 
 type reviewedAgentFactExecutor struct{ calls int }
@@ -42,7 +42,7 @@ func (e *reviewedAgentFactExecutor) Extract(_ context.Context, tool catalog.Tool
 
 func TestHostSourceFactRoutingUsesOnlyRegisteredAgentAndNotProviderExecutor(t *testing.T) {
 	ctx := context.Background()
-	store, err := providerconfig.Open(ctx, filepath.Join(t.TempDir(), "facts.db"))
+	store, err := providerconfig.OpenTyped(ctx, v3fixture.EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}

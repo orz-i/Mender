@@ -1,6 +1,6 @@
-// Package typedsupply is the future read-only Profile supplier for typed
-// Tool sources. It accepts only Stage E migrated databases; it is NOT
-// registered by the legacy bootstrap.Runtime or MCP server.
+// Package typedsupply provides the canonical v3 read-only Profile supplier
+// for typed Tool sources. It never creates tools or grants; it is wired to the
+// official Runtime and MCP server.
 package typedsupply
 
 import (
@@ -63,7 +63,7 @@ type Snapshot struct {
 }
 type Reader struct{ db *sql.DB }
 
-// Open opens an existing, already migrated SQLite database in query-only mode.
+// Open reads an existing validated v3 SQLite database in query-only mode.
 // It does not create a file, run migrations, activate Providers or Agents,
 // connect Sandboxes, or mutate a Profile or its grants.
 func Open(ctx context.Context, path string) (*Reader, error) {

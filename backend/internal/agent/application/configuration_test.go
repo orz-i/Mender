@@ -9,7 +9,6 @@ import (
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
@@ -69,7 +68,7 @@ func (r selectionRunner) ExecuteConfigured(ctx context.Context, _ agentdomain.Ag
 }
 func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T) {
 	ctx := context.Background()
-	store, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "selections.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "selections.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +176,7 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 
 func TestLocalAgentWorkspaceApprovalRejectsPathRedirectionWithoutLaunching(t *testing.T) {
 	ctx := context.Background()
-	store, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "local-agent-workspace.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "local-agent-workspace.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

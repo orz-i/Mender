@@ -192,13 +192,13 @@ func remoteTestFixture(t *testing.T) (context.Context, *Controller, *sandsqlite.
 	t.Helper()
 	ctx := context.Background()
 	db := filepath.Join(t.TempDir(), "daytona-runtime.db")
-	runs, err := sandsqlite.Open(ctx, db)
+	runs, err := openSandboxV3(t, ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runs.Close() })
 	// Lifecycle CAS needs the Provider config table in the shared DB.
-	providers, err := providerconfigs.Open(ctx, db)
+	providers, err := providerconfigs.OpenTyped(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}

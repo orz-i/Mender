@@ -41,7 +41,7 @@ func completeTaskWithEvidence(t *testing.T, s *Store, id agentdomain.TaskID, res
 func TestAgentTaskPersistenceFencingAndGrants(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mender.sqlite")
-	s, err := Open(ctx, path)
+	s, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestAgentTaskPersistenceFencingAndGrants(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	second, err := Open(ctx, path)
+	second, err := openAgentV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestAgentTaskPersistenceFencingAndGrants(t *testing.T) {
 func TestAgentSchemaDowngradeRefused(t *testing.T) {
 	ctx := context.Background()
 	p := filepath.Join(t.TempDir(), "store.db")
-	s, err := Open(ctx, p)
+	s, err := openAgentV3(t, ctx, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,103 +129,15 @@ func TestAgentSchemaDowngradeRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = s.Close()
-	if newer, err := Open(ctx, p); err == nil {
+	if newer, err := openAgentV3(t, ctx, p); err == nil {
 		_ = newer.Close()
 		t.Fatal("future schema accepted")
 	}
 }
 
-func TestAgentProviderBindingAndGrantHistoryAreDurablyGuarded(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "store.db")
-	s, err := Open(ctx, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The standalone Agent store need not know Provider persistence; a later
-	// Runtime composition on this same database installs the cross-domain guard.
-	if _, err := s.db.ExecContext(ctx, `CREATE TABLE provider_configs(
-		provider_id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL, config_json TEXT NOT NULL
-	)`); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	s, err = Open(ctx, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
-
-	id, err := agentdomain.NewID()
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, err := agentdomain.NewAgent(agentdomain.Spec{
-		ID: id, Name: "Test Agent", Backend: agentdomain.BackendGrok,
-		PluginID: agentdomain.BackendGrok.PluginID(), ExtensionID: "main",
-		WorkspaceRoot: t.TempDir(), Isolation: "restricted_host",
-		OwnerKind: "local_user", OwnerRef: "os:owner", CreatedAt: time.Now(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.CreateAgent(ctx, a); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.GrantProfile(ctx, id, "prof_test"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.RevokeProfile(ctx, id, "prof_test"); err != nil {
-		t.Fatal(err)
-	}
-	rows, err := s.db.QueryContext(ctx, `SELECT action FROM agent_grant_events WHERE agent_id=? ORDER BY event_id`, string(id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var events []string
-	for rows.Next() {
-		var action string
-		if err := rows.Scan(&action); err != nil {
-			t.Fatal(err)
-		}
-		events = append(events, action)
-	}
-	if err := rows.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if len(events) != 2 || events[0] != "grant" || events[1] != "revoke" {
-		t.Fatalf("grant history=%v", events)
-	}
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM agent_grant_events WHERE agent_id=?`, string(id)); err == nil {
-		t.Fatal("immutable grant history deleted")
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO provider_configs(provider_id,plugin_id,config_json) VALUES(?,?,?)`,
-		"prov_test", "io.mender.provider.agent-delegation", `{"agentId":"`+string(id)+`"}`); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.DeleteAgent(ctx, id); !errors.Is(err, agentdomain.ErrConflict) {
-		t.Fatalf("in-use Agent was deleted: %v", err)
-	}
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM provider_configs WHERE provider_id=?`, "prov_test"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.DeleteAgent(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	var retained int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM agent_grant_events WHERE agent_id=?`, string(id)).Scan(&retained); err != nil {
-		t.Fatal(err)
-	}
-	if retained != 2 {
-		t.Fatalf("grant history lost after Agent delete: %d", retained)
-	}
-}
-
 func TestAgentTaskBudgetIsAtomicAcrossAgentsAndPrincipals(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "tasks.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "tasks.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +204,7 @@ func TestAgentTaskBudgetIsAtomicAcrossAgentsAndPrincipals(t *testing.T) {
 
 func TestAgentExpiredRecoveryFencesOldGenerationWithoutReplay(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "expired.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "expired.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

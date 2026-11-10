@@ -14,7 +14,7 @@ import (
 func TestSandboxAdmissionAuditDurable(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "admissions.db")
-	store, err := Open(ctx, path)
+	store, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestSandboxAdmissionAuditDurable(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	restored, err := Open(ctx, path)
+	restored, err := openSandboxV3(t, ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ func executionEvidenceFixtureWithIsolation(t *testing.T, isolation string) (*Sto
 func executionEvidenceFixtureWithBackend(t *testing.T, backend agentdomain.Backend, isolation string) (*Store, agentdomain.Task, string) {
 	t.Helper()
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "execution-evidence.sqlite"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "execution-evidence.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}

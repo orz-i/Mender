@@ -11,7 +11,6 @@ import (
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentworkspace "github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
-	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
@@ -26,7 +25,7 @@ func (inertRunner) ExecuteConfigured(context.Context, agentdomain.Agent, string,
 }
 func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 	ctx := context.Background()
-	s, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	s, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

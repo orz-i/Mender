@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
-// OpenTyped reuses the existing Agent/Task/Session/Grant Store on a verified
-// v3 schema, WITHOUT legacy migrations or the legacy Open's automatic
-// InvalidateAllPendingApprovals. F4 Runtime alone must coordinate Agent
-// recovery and pending approvals after quiescence and task ownership review.
-// It never starts ACP, replays unknown tasks, or changes pending approvals.
+// OpenTyped is the only Agent Store constructor. The shared v3 schema must
+// already be present and verified; startup recovery/approval invalidation is
+// explicitly coordinated by the Runtime after Task ownership review. This
+// Store constructor never starts ACP, replays Tasks or changes approvals.
 func OpenTyped(ctx context.Context, path string) (*Store, error) {
-	db, err := hardcut.OpenTypedContextStore(ctx, path)
+	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("open typed Agent sqlite: %w", err)
 	}

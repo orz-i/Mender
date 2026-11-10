@@ -13,7 +13,7 @@ import (
 
 func TestWorkspaceCannotBeUnboundWithActiveOwnerApprovalMode(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "workspace-owner-approval.db"))
+	store, err := openAgentV3(t, ctx, filepath.Join(t.TempDir(), "workspace-owner-approval.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

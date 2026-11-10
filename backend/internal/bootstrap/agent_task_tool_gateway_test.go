@@ -15,11 +15,11 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	v3schema "github.com/orz-i/Mender/backend/internal/schema/v3"
 )
 
 type waitingForTaskToolExecutor struct {
@@ -124,7 +124,7 @@ func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 	// The v3 Task Tool gateway never fabricates a Provider or guesses which
 	// Workspace a restricted Sandbox contains. All TargetScope and grants
 	// are explicitly seeded in this disposable owner-reviewed fixture.
-	writer, err := hardcut.OpenTypedContextStore(ctx, r.providerDatabasePath)
+	writer, err := v3schema.OpenContextStore(ctx, r.providerDatabasePath)
 	if err != nil {
 		t.Fatal(err)
 	}
