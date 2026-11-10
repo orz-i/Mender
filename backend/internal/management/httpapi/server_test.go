@@ -347,7 +347,7 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/api/v1/tools/browse?limit=100",
+		server.URL+"/api/v1/tools/browse?limit=100&sourceId=provider:"+providerID,
 		nil,
 		http.StatusOK,
 	)
@@ -1497,7 +1497,7 @@ paths:
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/api/v1/tools/browse?limit=100",
+		server.URL+"/api/v1/tools/browse?limit=100&sourceId=provider:"+provider["providerId"].(string),
 		nil,
 		http.StatusOK,
 	)

@@ -33,6 +33,7 @@ func TestDeleteConfiguredProviderRejectsProfileReference(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	configureAttachedMCPProviderTest(t, runtime, context.Background(), provider.ID())
 	schema, _ := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
 	tool, err := catalogdomain.NewTool(
 		mustBootstrapToolID(t, "tool_00000000000000000000000000000011"),

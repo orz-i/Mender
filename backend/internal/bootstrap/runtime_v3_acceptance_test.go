@@ -128,7 +128,7 @@ func TestOfficialV3RuntimeFreshWorkspaceMCPInvocationAndRevocation(t *testing.T)
 		t.Fatal(err)
 	}
 	suite, err := r.SandboxWorkspaceTools(ctx, sb.ID(), owner)
-	if err != nil || suite.ProviderID != "" || len(suite.Tools) != 4 {
+	if err != nil || len(suite.Tools) != 4 {
 		t.Fatalf("Sandbox native tool projection: %+v %v", suite, err)
 	}
 	p, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{Slug: "native-v3-test", DisplayName: "Native V3"})
@@ -198,7 +198,7 @@ func TestOfficialV3RuntimeAgentToolStatusAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	suite, err := r.AgentTools(ctx, created.ID(), owner)
-	if err != nil || suite.Status != "ready" || suite.ProviderID != "" || len(suite.Tools) != 5 {
+	if err != nil || suite.Status != "ready" || len(suite.Tools) != 5 {
 		t.Fatalf("Agent owned source: %+v %v", suite, err)
 	}
 	var statusID catalog.ToolID
@@ -485,7 +485,7 @@ func TestOfficialV3RestartRetainsAgentSourceIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, err := first.AgentTools(ctx, created.ID(), owner)
-	if err != nil || before.Status != "ready" || len(before.Tools) != 5 || before.ProviderID != "" {
+	if err != nil || before.Status != "ready" || len(before.Tools) != 5 {
 		t.Fatalf("before restart %+v %v", before, err)
 	}
 	if err := first.Close(); err != nil {
@@ -501,7 +501,7 @@ func TestOfficialV3RestartRetainsAgentSourceIdentity(t *testing.T) {
 		}
 	}()
 	after, err := reopened.AgentTools(ctx, created.ID(), owner)
-	if err != nil || after.Status != "ready" || after.ProviderID != "" {
+	if err != nil || after.Status != "ready" {
 		t.Fatalf("after restart %+v %v", after, err)
 	}
 	if !reflect.DeepEqual(before.Tools, after.Tools) {

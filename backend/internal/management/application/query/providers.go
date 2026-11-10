@@ -88,9 +88,8 @@ type ProviderViewSource interface {
 	ListProviders(context.Context) ([]catalogdomain.Provider, error)
 	ListProviderConfigs(context.Context) ([]providerplugin.Configuration, error)
 	ListProviderToolCounts(context.Context) (map[catalogdomain.ProviderID]int, error)
-	ListToolSourceOwners(context.Context) (map[catalogdomain.ProviderID]ToolSourceOwner, error)
 	ProviderPluginDescriptorForConfig(context.Context, providerplugin.Configuration) (providerplugin.Descriptor, bool, error)
-	ProviderToolSource(context.Context, catalogdomain.Provider, *providerplugin.Configuration, map[catalogdomain.ProviderID]ToolSourceOwner) (ToolSourceView, error)
+	ProviderToolSource(context.Context, catalogdomain.Provider, *providerplugin.Configuration) (ToolSourceView, error)
 }
 
 // ProviderProjector adapts plugin-owned configuration formats at infrastructure
@@ -119,10 +118,6 @@ func (q ListProviderViews) Execute(ctx context.Context) ([]ProviderView, error) 
 	if err != nil {
 		return nil, err
 	}
-	owners, err := q.source.ListToolSourceOwners(ctx)
-	if err != nil {
-		return nil, err
-	}
 	configByProvider := make(map[catalogdomain.ProviderID]providerplugin.Configuration, len(configs))
 	for _, config := range configs {
 		configByProvider[config.ProviderID] = config
@@ -140,7 +135,7 @@ func (q ListProviderViews) Execute(ctx context.Context) ([]ProviderView, error) 
 			}
 		}
 		view := q.project(provider, config, descriptor, counts[provider.ID()])
-		source, err := q.source.ProviderToolSource(ctx, provider, config, owners)
+		source, err := q.source.ProviderToolSource(ctx, provider, config)
 		if err != nil {
 			return nil, err
 		}
@@ -150,22 +145,10 @@ func (q ListProviderViews) Execute(ctx context.Context) ([]ProviderView, error) 
 	return views, nil
 }
 
-// SourceOwnerForProvider never infers ownership from a namespace or config.
-// The host supplies whether this is a managed facade; identity remains in the
-// exact resource binding, independently of its plugin implementation.
-func SourceOwnerForProvider(provider catalogdomain.Provider, configured, managed bool,
-	owners map[catalogdomain.ProviderID]ToolSourceOwner) ToolSourceOwner {
+// SourceOwnerForProvider projects a configured, independently owned Provider only.
+// Agent and native tools are projected through Catalog typed SourceRef, not this list.
+func SourceOwnerForProvider(provider catalogdomain.Provider, configured bool) ToolSourceOwner {
 	if !configured {
-		return ToolSourceOwner{Kind: "unclaimed"}
-	}
-	owner, claimed := owners[provider.ID()]
-	if managed {
-		if claimed {
-			return owner
-		}
-		return ToolSourceOwner{Kind: "unclaimed"}
-	}
-	if claimed {
 		return ToolSourceOwner{Kind: "unclaimed"}
 	}
 	return ToolSourceOwner{Kind: "provider", ResourceID: provider.ID().String(), Name: provider.DisplayName()}

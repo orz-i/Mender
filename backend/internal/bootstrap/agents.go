@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -31,6 +32,11 @@ func newTypedAgents(ctx context.Context, dbPath string, owner gov.Principal,
 ) (*agentapplication.Service, *agentsqlite.Store, *agentacp.LocalFactory, error) {
 	store, err := agentsqlite.OpenTyped(ctx, dbPath)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Fence only overdue prior-run tasks. Preserve unknown outcomes and never replay.
+	if _, err := store.ReconcileExpired(ctx, time.Now().UTC().Add(-12*time.Minute)); err != nil {
+		_ = store.Close()
 		return nil, nil, nil, err
 	}
 	return composeAgentService(ctx, store, owner, profiles, policies, governance, fixtureRunner)

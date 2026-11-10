@@ -11,8 +11,6 @@ import (
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -65,6 +63,23 @@ func taskServicePrincipal(t *testing.T, profileID string) gov.Context {
 	return c
 }
 
+func agentOwnedToolIDs(t *testing.T, r *Runtime, ctx context.Context, id agentdomain.ID, owner gov.Context) map[string]catalogdomain.ToolID {
+	t.Helper()
+	state, err := r.AgentTools(ctx, id, owner)
+	if err != nil || state.Status != "ready" || len(state.Tools) != 5 {
+		t.Fatalf("Agent-owned tools: %+v %v", state, err)
+	}
+	ids := make(map[string]catalogdomain.ToolID, len(state.Tools))
+	for _, item := range state.Tools {
+		parsed, err := catalogdomain.ParseToolID(item.ToolID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[item.SourceKey] = parsed
+	}
+	return ids
+}
+
 func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	ctx := context.Background()
 	finished := make(chan struct{})
@@ -77,35 +92,15 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	}
 	defer func() { _ = r.Close() }()
 	owner := agentOwnerContext(t, r)
-	a, err := r.Agents.Create(ctx, agentapplication.CreateRequest{
+	a, err := r.CreateAgentWithTools(ctx, agentapplication.CreateRequest{
 		Name: "Code Reviewer", Backend: agentdomain.BackendCodex, WorkspaceRoot: t.TempDir(),
 	}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config, err := json.Marshal(map[string]string{"agentId": string(a.ID())})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := registerConfiguredProviderTest(t, r, ctx, catalogapplication.RegisterProviderRequest{
-		Namespace: "agent-reviewer", DisplayName: "Code Reviewer",
-	}, agentdelegation.ID, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := syncConfiguredProviderTest(t, r, ctx, provider.ID()); err != nil {
-		t.Fatal(err)
-	}
-	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := map[string]catalogdomain.ToolID{}
-	for _, tool := range tools {
-		ids[tool.SourceKey()] = tool.ID()
-	}
+	ids := agentOwnedToolIDs(t, r, ctx, a.ID(), owner)
 	if len(ids) != 5 || ids["agent.delegate"] == "" || ids["agent.status"] == "" {
-		t.Fatalf("Agent facade Tools = %v", ids)
+		t.Fatalf("Agent-owned Tools = %v", ids)
 	}
 
 	p, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{

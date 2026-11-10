@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	migration "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	_ "modernc.org/sqlite"
 )
 
@@ -24,64 +23,41 @@ func fileDigest(t *testing.T, path string) [sha256.Size]byte {
 	return sha256.Sum256(data)
 }
 
-// StageCopy is the actual Stage E cross-context transaction, not a mock v3
-// schema. Old Runtime startup must not mutate it or launch any Provider/Agent.
-func TestLegacyRuntimeRejectsStagedF4DatabaseBeforeAnyWrites(t *testing.T) {
+// A v3 runtime accepts only a complete, attested typed schema. A valid v3
+// database opens without repair or writes beyond normal runtime lifecycle.
+func TestV3RuntimeAcceptsFreshTypedDatabase(t *testing.T) {
 	ctx := context.Background()
-	dir := t.TempDir()
-	legacy := filepath.Join(dir, "legacy.db")
-	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: legacy})
+	path := filepath.Join(t.TempDir(), "fresh-v3.db")
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: path})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("fresh v3 runtime: %v", err)
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	report, err := migration.AssessPath(ctx, legacy)
-	if err != nil || report.Status != "ready" {
-		t.Fatalf("blank fixture has unresolved migration blockers: %+v %v", report.Conflicts, err)
-	}
-	candidate, err := migration.StageCopy(ctx, legacy, filepath.Join(dir, "future.db"), report.ManifestDigest)
+	reopened, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: path})
 	if err != nil {
+		t.Fatalf("reopen valid v3 runtime: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
 		t.Fatal(err)
-	}
-	before := fileDigest(t, candidate.CandidatePath)
-	reopened, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: candidate.CandidatePath})
-	if err == nil {
-		_ = reopened.Close()
-		t.Fatal("Provider-v2 Runtime accepted F4 candidate schema")
-	}
-	if !strings.Contains(err.Error(), "typed Tool hard-cut database") {
-		t.Fatalf("did not reject future schema before opening Stores: %v", err)
-	}
-	if after := fileDigest(t, candidate.CandidatePath); after != before {
-		t.Fatal("rejected old Runtime modified converted database")
-	}
-	db, err := sql.Open("sqlite", candidate.CandidatePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	var v int
-	if err := db.QueryRow("SELECT MAX(version) FROM catalog_schema_migrations").Scan(&v); err != nil || v != 3 {
-		t.Fatalf("old runtime damaged migrated Catalog version %d: %v", v, err)
 	}
 }
 
-func TestLegacyRuntimeRejectsFutureOrPartiallyTypedSchemaWithoutRepair(t *testing.T) {
+func TestV3RuntimeRejectsFutureOrPartiallyTypedSchemaWithoutRepair(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name   string
 		update string
 		reason string
 	}{
-		{"catalog-future", "INSERT INTO catalog_schema_migrations(version,applied_at) VALUES(3,'test')", "catalog_schema_migrations"},
-		{"agent-future", "INSERT INTO agent_schema_migrations(version,applied_at) VALUES(20,'test')", "agent_schema_migrations"},
-		{"typed-tool-column-without-version", "ALTER TABLE tools ADD COLUMN source_kind TEXT", "typed Tool source columns"},
-		{"corrupt-hardcut-marker", "CREATE TABLE tool_hardcut_schema_migrations(version INTEGER PRIMARY KEY)", "typed Tool hard-cut database"},
+		{"catalog-future", "INSERT INTO catalog_schema_migrations(version,applied_at) VALUES(99,'test')", "catalog_schema_migrations"},
+		{"agent-future", "INSERT INTO agent_schema_migrations(version,applied_at) VALUES(99,'test')", "agent_schema_migrations"},
+		{"missing-hardcut-marker", "DELETE FROM tool_hardcut_schema_migrations WHERE version=1", "tool_hardcut_schema_migrations"},
+		{"legacy-facade-resurrected", "CREATE TABLE agent_tool_facades(agent_id TEXT PRIMARY KEY)", "legacy facade table"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "legacy.sqlite")
+			path := filepath.Join(t.TempDir(), "v3.sqlite")
 			runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: path})
 			if err != nil {
 				t.Fatal(err)
@@ -116,13 +92,20 @@ func TestLegacyRuntimeRejectsFutureOrPartiallyTypedSchemaWithoutRepair(t *testin
 	}
 }
 
-func TestLegacyRuntimeSchemaPreflightRejectsMissingDatabaseSourceSafely(t *testing.T) {
+func TestV3RuntimeMissingDatabaseGetsFreshSchema(t *testing.T) {
 	ctx := context.Background()
-	missing := filepath.Join(t.TempDir(), "never-created.sqlite")
-	if err := requireLegacyRuntimeSchema(ctx, missing); err != nil {
-		t.Fatalf("new database denied by old runtime preflight: %v", err)
-	}
+	missing := filepath.Join(t.TempDir(), "new.sqlite")
 	if _, err := os.Stat(missing); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("inert schema preflight created a database")
+		t.Fatal("test setup created database")
+	}
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: missing})
+	if err != nil {
+		t.Fatalf("new database should get fresh v3 schema: %v", err)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(missing); err != nil {
+		t.Fatal("fresh v3 database was not created")
 	}
 }

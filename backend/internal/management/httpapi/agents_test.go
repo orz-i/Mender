@@ -58,12 +58,12 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	toolPath := api + "/agents/" + id + "/tools"
 	firstTools := requestJSON(t, server.Client(), http.MethodGet, toolPath, nil, http.StatusOK)
 	if firstTools["status"] != "ready" || firstTools["suiteId"] != "agent.delegation" ||
-		len(firstTools["tools"].([]any)) != 5 || firstTools["providerName"] != "Code Reviewer" {
+		len(firstTools["tools"].([]any)) != 5 || firstTools["providerId"] != nil {
 		t.Fatalf("new Agent should have its own tools without grants: %v", firstTools)
 	}
 	secondTools := requestJSON(t, server.Client(), http.MethodPost, toolPath, nil, http.StatusOK)
-	if secondTools["providerId"] != firstTools["providerId"] {
-		t.Fatalf("explicit ensure re-created facade: %v %v", firstTools, secondTools)
+	if secondTools["providerId"] != nil {
+		t.Fatalf("Agent Tools acquired a Provider façade: %v", secondTools)
 	}
 	for index, value := range firstTools["tools"].([]any) {
 		if value.(map[string]any)["toolId"] != secondTools["tools"].([]any)[index].(map[string]any)["toolId"] {

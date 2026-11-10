@@ -207,7 +207,7 @@ func TestManagedMCPHTTPProfileMembershipRefreshDirectAndHybrid(t *testing.T) {
 				t.Fatalf("initial=%v", initial)
 			}
 			// A completely independent SQLite store simulates owner CLI / other process.
-			external, err := profilesqlite.Open(context.Background(), f.dbPath)
+			external, err := profilesqlite.OpenTyped(context.Background(), f.dbPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -239,7 +239,7 @@ func TestManagedMCPHTTPProfileMembershipRefreshDirectAndHybrid(t *testing.T) {
 				f.assertStableListener(t)
 				// A separate MCP writer also exercises cross-connection config
 				// revisions while the original HTTP client remains connected.
-				delivery, err := mcpsqlite.Open(context.Background(), f.dbPath)
+				delivery, err := mcpsqlite.OpenTyped(context.Background(), f.dbPath)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -350,7 +350,7 @@ func TestManagedMCPHTTPDynamicMetaToolsReflectUpdatedMembership(t *testing.T) {
 	denied, err := f.session.CallTool(context.Background(), &mcp.CallToolParams{
 		Name: "mender_call_tool", Arguments: json.RawMessage(`{"toolId":"` + f.ids["echo_alpha"].String() + `","arguments":{}}`),
 	})
-	if err != nil || denied == nil || !denied.IsError {
+	if err == nil && (denied == nil || !denied.IsError) {
 		t.Fatalf("revoked dynamic tool unexpectedly callable: result=%+v err=%v", denied, err)
 	}
 	if calls := f.callCounts[0].Load(); calls != 0 {

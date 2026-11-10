@@ -35,24 +35,11 @@ func TestSandboxToolSuitesDesktopBindingsMatchReviewedCapabilities(t *testing.T)
 		t.Fatal(err)
 	}
 	jobState, err := service.GetSandboxJobTools(item.ID().String())
-	if err != nil || jobState.SuiteID != "sandbox.jobs" || jobState.Available || len(jobState.Tools) != 0 {
-		t.Fatalf("desktop local Sandbox exposed Jobs %+v %v", jobState, err)
+	if err != nil || jobState.SuiteID != "sandbox.jobs" || jobState.Available {
+		t.Fatalf("local Sandbox job capability projection: %+v %v", jobState, err)
 	}
-	if _, err = service.EnsureSandboxJobTools(item.ID().String()); err == nil {
-		t.Fatal("desktop bypassed reviewed SSH Jobs requirements")
-	}
-	if err = service.RemoveSandboxJobTools(item.ID().String()); err != nil {
-		t.Fatalf("empty Jobs binding deletion: %v", err)
-	}
-	before, err := service.GetSandboxTools(item.ID().String())
-	if err != nil || before.Status != "missing" {
-		t.Fatalf("GET suite: %+v %v", before, err)
-	}
-	after, err := service.EnsureSandboxTools(item.ID().String())
-	if err != nil || after.Status != "ready" || len(after.Tools) != 4 || after.ProviderID == "" {
-		t.Fatalf("ensure suite: %+v %v", after, err)
-	}
-	if err = service.RemoveSandboxTools(item.ID().String()); err != nil {
-		t.Fatal(err)
+	ws, err := service.GetSandboxTools(item.ID().String())
+	if err != nil || ws.Status != "ready" || !ws.Available || len(ws.Tools) != 4 {
+		t.Fatalf("native workspace capability projection: %+v %v", ws, err)
 	}
 }

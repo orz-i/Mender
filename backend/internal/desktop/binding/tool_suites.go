@@ -25,14 +25,12 @@ type SandboxTool struct {
 	Title     string `json:"title"`
 }
 type SandboxToolSuite struct {
-	SuiteID      string        `json:"suiteId"`
-	SandboxID    string        `json:"sandboxId"`
-	Status       string        `json:"status"`
-	ProviderID   string        `json:"providerId,omitempty"`
-	ProviderName string        `json:"providerName,omitempty"`
-	Available    bool          `json:"available"`
-	Issue        string        `json:"issue,omitempty"`
-	Tools        []SandboxTool `json:"tools"`
+	SuiteID   string        `json:"suiteId"`
+	SandboxID string        `json:"sandboxId"`
+	Status    string        `json:"status"`
+	Available bool          `json:"available"`
+	Issue     string        `json:"issue,omitempty"`
+	Tools     []SandboxTool `json:"tools"`
 }
 
 func (s *Service) ListToolSuites() (ToolSuiteDefinitionList, error) {
@@ -55,7 +53,7 @@ func (s *Service) ListToolSuites() (ToolSuiteDefinitionList, error) {
 func projectSandboxToolSuite(value bootstrap.SandboxToolSuite) SandboxToolSuite {
 	result := SandboxToolSuite{
 		SuiteID: string(value.SuiteID), SandboxID: value.SandboxID.String(),
-		Status: value.Status, ProviderID: value.ProviderID, ProviderName: value.ProviderName,
+		Status:    value.Status,
 		Available: value.Available, Issue: value.Issue, Tools: make([]SandboxTool, 0, len(value.Tools)),
 	}
 	for _, tool := range value.Tools {
@@ -77,30 +75,4 @@ func (s *Service) GetSandboxTools(id string) (SandboxToolSuite, error) {
 		return SandboxToolSuite{}, err
 	}
 	return projectSandboxToolSuite(item), nil
-}
-func (s *Service) EnsureSandboxTools(id string) (SandboxToolSuite, error) {
-	caller, err := s.agentOwnerContext()
-	if err != nil {
-		return SandboxToolSuite{}, err
-	}
-	parsed, err := sandboxdomain.ParseID(id)
-	if err != nil {
-		return SandboxToolSuite{}, err
-	}
-	item, err := s.runtime.EnsureSandboxWorkspaceTools(s.ctx, parsed, caller)
-	if err != nil {
-		return SandboxToolSuite{}, err
-	}
-	return projectSandboxToolSuite(item), nil
-}
-func (s *Service) RemoveSandboxTools(id string) error {
-	caller, err := s.agentOwnerContext()
-	if err != nil {
-		return err
-	}
-	parsed, err := sandboxdomain.ParseID(id)
-	if err != nil {
-		return err
-	}
-	return s.runtime.RemoveSandboxWorkspaceTools(s.ctx, parsed, caller)
 }

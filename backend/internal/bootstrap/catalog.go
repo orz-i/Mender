@@ -10,7 +10,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	"github.com/orz-i/Mender/backend/internal/catalog/infrastructure/identity"
 	sourcecatalog "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sourcecatalog"
-	catalogsqlite "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite"
 	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 )
 
@@ -59,18 +58,8 @@ type Catalog struct {
 	clock systemClock
 }
 
-// NewCatalog preserves the current Provider-v2 Runtime constructor until
-// F4 replaces the complete Runtime, never partially migrating a live DB.
-func NewCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
-	store, err := catalogsqlite.Open(ctx, options.DatabasePath)
-	if err != nil {
-		return nil, fmt.Errorf("compose catalog: %w", err)
-	}
-	return composeCatalog(store), nil
-}
-
-// NewTypedCatalog composes the SAME Catalog services over the Stage E typed
-// schema. It requires an existing database and verifies the exact current
+// NewTypedCatalog composes canonical Catalog services over the only supported
+// v3 schema. It requires an existing database and verifies the exact current
 // Agent/Provider identity; no Sandbox/Agent can grant itself a Tool source. This
 // constructor is only for the future single F4 v3 Runtime composition.
 func NewTypedCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {

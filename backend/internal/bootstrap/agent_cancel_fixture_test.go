@@ -9,9 +9,6 @@ import (
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 )
@@ -35,33 +32,13 @@ func TestAgentCanonicalTaskCancellationFixture(t *testing.T) {
 	}
 	defer func() { _ = r.Close() }()
 	owner := agentOwnerContext(t, r)
-	agent, err := r.Agents.Create(ctx, agentapplication.CreateRequest{
+	agent, err := r.CreateAgentWithTools(ctx, agentapplication.CreateRequest{
 		Name: "Cancelable Fixture", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir(),
 	}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config, err := json.Marshal(map[string]string{"agentId": string(agent.ID())})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := registerConfiguredProviderTest(t, r, ctx, catalogapplication.RegisterProviderRequest{
-		Namespace: "cancel-agent", DisplayName: "Cancelable Fixture",
-	}, agentdelegation.ID, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := syncConfiguredProviderTest(t, r, ctx, provider.ID()); err != nil {
-		t.Fatal(err)
-	}
-	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := map[string]catalogdomain.ToolID{}
-	for _, tool := range tools {
-		ids[tool.SourceKey()] = tool.ID()
-	}
+	ids := agentOwnedToolIDs(t, r, ctx, agent.ID(), owner)
 	profile, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{
 		Slug: "agent-cancel", DisplayName: "Cancelable Fixture",
 	}, "dynamic")

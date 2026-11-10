@@ -36,7 +36,7 @@ func TestDesktopOwnerCanConfigureAndDisableExactAgentToolPlacement(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	suite, err := runtime.EnsureSandboxWorkspaceTools(ctx, sandbox.ID(), owner)
+	suite, err := runtime.SandboxWorkspaceTools(ctx, sandbox.ID(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestDesktopOwnerCanConfigureAndDisableExactAgentToolPlacement(t *testing.T)
 		t.Fatalf("disable left a config %+v %v", listed, err)
 	}
 	after, err := runtime.SandboxWorkspaceTools(ctx, sandbox.ID(), owner)
-	if err != nil || after.ProviderID != suite.ProviderID || len(after.Tools) != len(suite.Tools) {
+	if err != nil || len(after.Tools) != len(suite.Tools) {
 		t.Fatalf("owner configuration unexpectedly modified Tool inventory: %+v %v", after, err)
 	}
 	host, err := desktop.CreateAgent(CreateAgentInput{Name: "Existing Host", Backend: "opencode", WorkspaceRoot: t.TempDir(), Isolation: "host"})
@@ -107,7 +107,7 @@ func TestDesktopAgentToolPlacementRejectsUnisolatedHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	suite, err := runtime.EnsureSandboxWorkspaceTools(ctx, sandbox.ID(), owner)
+	suite, err := runtime.SandboxWorkspaceTools(ctx, sandbox.ID(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}

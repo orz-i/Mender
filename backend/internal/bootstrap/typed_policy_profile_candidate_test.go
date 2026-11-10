@@ -2,12 +2,12 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 
 	app "github.com/orz-i/Mender/backend/internal/catalog/application"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	policyapp "github.com/orz-i/Mender/backend/internal/policy/application"
 	policy "github.com/orz-i/Mender/backend/internal/policy/domain"
@@ -15,27 +15,28 @@ import (
 	profile "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerconfig "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
+	_ "modernc.org/sqlite"
 )
 
 func TestTypedCatalogProfilePolicyAndProviderConfigReuseSameBusinessContracts(t *testing.T) {
 	ctx := context.Background()
-	legacy, candidate, providerID, providerToolID := migratedTypedCatalogCandidate(t)
-	catalogRoot, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: candidate})
+	dbPath, providerID, providerToolID := v3CatalogFixture(t)
+	catalogRoot, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = catalogRoot.Close() }()
-	profileRoot, err := NewTypedProfiles(ctx, candidate, catalogRoot.store, nil)
+	profileRoot, err := NewTypedProfiles(ctx, dbPath, catalogRoot.store, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = profileRoot.Close() }()
-	policyRoot, err := NewTypedPolicies(ctx, candidate, catalogRoot, profileRoot)
+	policyRoot, err := NewTypedPolicies(ctx, dbPath, catalogRoot, profileRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = policyRoot.Close() }()
-	configStore, err := providerconfig.OpenTyped(ctx, candidate)
+	configStore, err := providerconfig.OpenTyped(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,8 +98,6 @@ func TestTypedCatalogProfilePolicyAndProviderConfigReuseSameBusinessContracts(t 
 	if err != nil || denied.Kind() != policy.DecisionDeny {
 		t.Fatalf("native ToolID-specific Policy denied no longer: %+v %v", denied, err)
 	}
-	// The same rule cannot leak to a different real Provider tool, and the
-	// caller cannot impersonate an external Provider from a Native source.
 	input.SourceRef = "provider:" + providerID.String()
 	input.ToolID = providerToolID.String()
 	allowed, err := policyRoot.Evaluate.Execute(ctx, input)
@@ -113,17 +112,21 @@ func TestTypedCatalogProfilePolicyAndProviderConfigReuseSameBusinessContracts(t 
 	if _, err := catalogRoot.PageTools.Execute(ctx, app.PageToolsRequest{Mode: "browse", Limit: 100}); err != nil {
 		t.Fatal(err)
 	}
-	// The source is still an unaffected legacy v2 database. No real tool, ACP
-	// Task or SSH job is executed while testing these application contracts.
-	report, err := hardcut.AssessPath(ctx, legacy)
-	if err != nil || report.Status != "ready" {
-		t.Fatalf("typed stores wrote to source database: %v %+v", err, report.Conflicts)
-	}
 }
 
-func TestTypedPolicyAndProviderConfigStoresRejectUnmigratedDatabase(t *testing.T) {
+func TestTypedPolicyAndProviderConfigStoresRejectIncompatibleDatabase(t *testing.T) {
 	ctx := context.Background()
-	legacy, candidate, _, _ := migratedTypedCatalogCandidate(t)
+	dbPath, _, _ := v3CatalogFixture(t)
+	bad := filepath.Join(t.TempDir(), "bad.sqlite")
+	raw, err := sql.Open("sqlite", bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE tool_hardcut_schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO tool_hardcut_schema_migrations(version) VALUES(0)`); err != nil {
+		_ = raw.Close()
+		t.Fatal(err)
+	}
+	_ = raw.Close()
 	for _, open := range []struct {
 		name  string
 		check func(string) error
@@ -144,27 +147,25 @@ func TestTypedPolicyAndProviderConfigStoresRejectUnmigratedDatabase(t *testing.T
 		}},
 	} {
 		t.Run(open.name, func(t *testing.T) {
-			if err := open.check(legacy); err == nil {
-				t.Fatal("accepted old v2 database")
+			if err := open.check(bad); err == nil {
+				t.Fatal("accepted incompatible schema database")
 			}
 			if err := open.check(filepath.Join(t.TempDir(), "missing.db")); err == nil {
 				t.Fatal("created missing database")
 			}
 		})
 	}
-	// Explicitly verify the typed candidate opens with its real dependency
-	// pair rather than a nil/untrusted reference lookup.
-	cat, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: candidate})
+	cat, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = cat.Close() }()
-	profiles, err := NewTypedProfiles(ctx, candidate, cat.store, nil)
+	profiles, err := NewTypedProfiles(ctx, dbPath, cat.store, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = profiles.Close() }()
-	rules, err := NewTypedPolicies(ctx, candidate, cat, profiles)
+	rules, err := NewTypedPolicies(ctx, dbPath, cat, profiles)
 	if err != nil {
 		t.Fatal(err)
 	}

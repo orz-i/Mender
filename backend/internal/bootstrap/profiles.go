@@ -25,19 +25,6 @@ type Profiles struct {
 	store *profilesqlite.Store
 }
 
-func NewProfiles(
-	ctx context.Context,
-	databasePath string,
-	tools profileapplication.ToolLookup,
-	credentials profileapplication.CredentialLookup,
-) (*Profiles, error) {
-	store, err := profilesqlite.Open(ctx, databasePath)
-	if err != nil {
-		return nil, fmt.Errorf("compose profiles: %w", err)
-	}
-	return composeProfiles(store, tools, credentials), nil
-}
-
 // NewTypedProfiles keeps the same Profile application services, using the
 // already-migrated v3 Store. It does not create grants or run old migrations.
 func NewTypedProfiles(ctx context.Context, databasePath string, tools profileapplication.ToolLookup,

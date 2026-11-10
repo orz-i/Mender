@@ -41,7 +41,7 @@ func (r *Runtime) newMCPProjection(ctx context.Context, profile profiledomain.Pr
 	// There is no ProviderID fallback or second MCP execution engine.
 	return mcpserver.NewTyped(ctx, profile.ID().String(), mcpserver.TypedDependencies{
 		Profiles: r.typedSupply, DescribeTool: r.Catalog.DescribeTool.Execute,
-		InvokeTool: r.invokeToolWithSSHTimeout,
+		InvokeTool: r.InvokeTool.Execute,
 	})
 }
 

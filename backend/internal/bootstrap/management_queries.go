@@ -36,22 +36,12 @@ func (s managementProviderSource) ListProviderToolCounts(ctx context.Context) (m
 }
 
 func (s managementProviderSource) ProviderToolSource(ctx context.Context, provider catalogdomain.Provider,
-	config *providerplugin.Configuration, owners map[catalogdomain.ProviderID]managementquery.ToolSourceOwner) (managementquery.ToolSourceView, error) {
-	owner := ToolSourceForProvider(provider, config, owners)
+	config *providerplugin.Configuration) (managementquery.ToolSourceView, error) {
+	owner := managementquery.SourceOwnerForProvider(provider, config != nil)
 	view := managementquery.ToolSourceView{ToolSourceOwner: owner}
 	if !owner.Discoverable(false) {
 		return view, nil
 	}
-	var unavailable bool
-	if owner.Kind == "sandbox" && config != nil {
-		// Keep existing host-owned inert capability/lifecycle observations at
-		// the composition boundary. This does not probe or activate a backend.
-		var err error
-		unavailable, err = s.mcpSandboxSourceUnavailable(ctx, owner.ResourceID, config.PluginID)
-		if err != nil {
-			return managementquery.ToolSourceView{}, fmt.Errorf("sandbox readiness: %w", err)
-		}
-	}
-	view.Selectable = owner.Discoverable(unavailable)
+	view.Selectable = owner.Discoverable(false)
 	return view, nil
 }

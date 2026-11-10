@@ -85,12 +85,12 @@ func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	suite, err := r.EnsureSandboxWorkspaceTools(ctx, sandbox.ID(), owner)
+	suite, err := r.SandboxWorkspaceTools(ctx, sandbox.ID(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if suite.Status != "ready" || len(suite.Tools) != 4 {
-		t.Fatalf("bad Suite %+v", suite)
+	if len(suite.Tools) != 4 {
+		t.Fatalf("bad native workspace projection %+v", suite)
 	}
 	ids := make(map[string]catalogdomain.ToolID, len(suite.Tools))
 	for _, tool := range suite.Tools {
@@ -212,7 +212,7 @@ func TestAgentTaskToolGatewayUsesCanonicalInvocationAndRetainsToolIDs(t *testing
 		t.Fatalf("shell escaped task Tool allowlist: %v", err)
 	}
 	after, err := f.runtime.SandboxWorkspaceTools(context.Background(), f.sandbox.ID(), f.owner)
-	if err != nil || after.ProviderID != "" || after.Status != "ready" {
+	if err != nil || after.Status != "ready" {
 		t.Fatalf("Suite changed %+v %v", after, err)
 	}
 	for _, tool := range after.Tools {

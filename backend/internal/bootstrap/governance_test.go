@@ -708,6 +708,7 @@ func governedRuntimeFixture(
 		t.Fatal(err)
 	}
 
+	configureAttachedMCPProviderTest(t, runtime, ctx, provider.ID())
 	syncTools := runtime.Catalog.SyncProviderTools(governanceSource{})
 	if _, err := syncTools.Execute(ctx, provider.ID()); err != nil {
 		_ = runtime.Close()

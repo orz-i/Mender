@@ -88,7 +88,7 @@ func TestProviderDeleteReferenceGuardBlocksLateProfileAndRollsBackConfig(t *test
 	}
 	defer func() { _ = db.Close() }()
 	var fts int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tools_fts WHERE provider_id=?", providerID.String()).Scan(&fts); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tools_fts WHERE source_kind='provider' AND source_id=?", providerID.String()).Scan(&fts); err != nil {
 		t.Fatal(err)
 	}
 	if fts != 1 {
@@ -106,7 +106,7 @@ func TestProviderDeleteReferenceGuardBlocksLateProfileAndRollsBackConfig(t *test
 	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); !errors.Is(err, catalogapplication.ErrProviderNotFound) {
 		t.Fatalf("deleted catalog=%v", err)
 	}
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tools_fts WHERE provider_id=?", providerID.String()).Scan(&fts); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tools_fts WHERE source_kind='provider' AND source_id=?", providerID.String()).Scan(&fts); err != nil {
 		t.Fatal(err)
 	}
 	if fts != 0 {
@@ -165,7 +165,7 @@ func TestProviderDeletePolicyToolIDReferenceAndLateRuleGuard(t *testing.T) {
 	lateRuleJSON := fmt.Sprintf(`{"actions":["tool.invoke"],"providerIds":[],"toolIds":["%s"],"factKnowledge":"any"}`, toolID.String())
 	_, err = db.ExecContext(ctx, `INSERT INTO policy_rules(rule_id,display_name,enabled,decision,match_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`,
 		"rule_00000000000000000000000000000091", "late Policy", 1, "deny", lateRuleJSON, "now", "now")
-	if err == nil || !strings.Contains(err.Error(), "Policy reference unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "Policy source/Tool reference unavailable") {
 		t.Fatalf("late Policy insert error=%v, want guarded refusal", err)
 	}
 }
@@ -259,7 +259,7 @@ func TestProviderReferenceGuardRejectsInvalidPolicyUpdate(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	invalid := fmt.Sprintf(`{"actions":["tool.invoke"],"providerIds":["%s"],"toolIds":[],"factKnowledge":"any"}`, "prov_00000000000000000000000000000098")
 	_, err = db.ExecContext(ctx, "UPDATE policy_rules SET match_json=? WHERE rule_id=?", invalid, rule.ID().String())
-	if err == nil || !strings.Contains(err.Error(), "Policy reference unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "Policy source/Tool reference unavailable") {
 		t.Fatalf("invalid Policy UPDATE: %v", err)
 	}
 	// Ensure unaffected rules with null optional selector arrays remain writable.
@@ -296,7 +296,7 @@ func TestProviderReferenceGuardsRejectLateConfigAndProviderIDPolicy(t *testing.T
 	matchJSON := fmt.Sprintf(`{"actions":["tool.invoke"],"providerIds":["%s"],"toolIds":[],"factKnowledge":"any"}`, providerID.String())
 	_, err = db.ExecContext(ctx, `INSERT INTO policy_rules(rule_id,display_name,enabled,decision,match_json,created_at,updated_at)
         VALUES(?,?,?,?,?,?,?)`, "rule_00000000000000000000000000000092", "late provider", 1, "deny", matchJSON, "now", "now")
-	if err == nil || !strings.Contains(err.Error(), "Policy reference unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "Policy source/Tool reference unavailable") {
 		t.Fatalf("late ProviderID policy creation error: %v", err)
 	}
 	var count int
@@ -324,7 +324,7 @@ func TestProviderReferenceSQLDeleteGuardWithoutPreflight(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 	_, err = db.ExecContext(ctx, "DELETE FROM providers WHERE id=?", providerID.String())
-	if err == nil || !strings.Contains(err.Error(), "Provider has active references") {
+	if err == nil || !strings.Contains(err.Error(), "Provider has configured/Policy references") {
 		t.Fatalf("direct Provider deletion error: %v", err)
 	}
 	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {

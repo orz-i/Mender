@@ -14,26 +14,11 @@ import (
 )
 
 func (s Service) RegisterConfiguredProvider(
-	ctx context.Context,
-	request catalogapplication.RegisterProviderRequest,
-	pluginID providerplugin.ID,
-	rawConfig json.RawMessage,
+	ctx context.Context, request catalogapplication.RegisterProviderRequest,
+	pluginID providerplugin.ID, rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	return s.registerConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext, false)
-}
-
-func (s Service) registerConfiguredProvider(
-	ctx context.Context,
-	request catalogapplication.RegisterProviderRequest,
-	pluginID providerplugin.ID,
-	rawConfig json.RawMessage,
-	governanceContext governancedomain.Context,
-	managedFacade bool,
-) (catalogdomain.Provider, error) {
-	// A resource-owned facade may only be created by its owner workflow.
-	// The public Provider API/CLI never gets a creation authorization bit.
-	if s.deps.IsManagedFacade(pluginID) != managedFacade {
+	if s.deps.IsRetiredProviderID != nil && s.deps.IsRetiredProviderID(pluginID) {
 		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
 	}
 	plugin, descriptor, err := s.resolveProviderPlugin(pluginID)
@@ -131,7 +116,7 @@ func (s Service) RegisterInstalledProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	if s.deps.IsManagedFacade(pluginID) {
+	if s.deps.IsRetiredProviderID != nil && s.deps.IsRetiredProviderID(pluginID) {
 		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
 	}
 	if s.deps.Installations == nil {
@@ -232,10 +217,4 @@ func (s Service) RegisterInstalledProvider(
 		)
 	}
 	return provider, nil
-}
-
-func (s Service) RegisterManagedFacade(ctx context.Context, request catalogapplication.RegisterProviderRequest,
-	pluginID providerplugin.ID, rawConfig json.RawMessage, governanceContext governancedomain.Context,
-) (catalogdomain.Provider, error) {
-	return s.registerConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext, true)
 }

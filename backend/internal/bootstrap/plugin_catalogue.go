@@ -86,7 +86,7 @@ func pluginEntry(descriptor platformplugin.Descriptor, kind string, installation
 // may lead to a resource create flow. Descriptive capabilities are not input.
 func reviewedMarketplaceAction(descriptor platformplugin.Descriptor, installed bool) MarketplaceAction {
 	if installed {
-		if isManagedProviderFacade(providerplugin.ID(descriptor.PluginID)) {
+		if isRetiredInternalProviderID(providerplugin.ID(descriptor.PluginID)) {
 			return MarketplaceNone
 		}
 		switch descriptor.Extension.Kind {

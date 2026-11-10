@@ -83,13 +83,16 @@ func TestNativeSandboxRouterUsesAtomicLeaseWithoutSecondExecutionEngine(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := router.ConfigureNativeLeases(f.store); err != nil {
+		t.Fatal(err)
+	}
 	placement, err := router.Resolve(ctx, item.ID(), sandbox.CapabilityRead)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// A matching ToolID or SandboxId without the approved native request
 	// cannot consume the same Router's lease path.
-	if _, err := router.AcquireNative(ctx, f.request.Caller, placement); !errors.Is(err, typedlease.ErrUnadmitted) {
+	if _, err := router.AcquireNative(ctx, f.request.Caller, placement); !errors.Is(err, typedlease.ErrUnadmitted) && !errors.Is(err, sandbox.ErrNotAuthorized) {
 		t.Fatalf("unbound Native request acquired Sandbox: %v", err)
 	}
 	if backend.opens != 0 || f.count(t) != 0 {

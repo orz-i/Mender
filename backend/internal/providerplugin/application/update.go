@@ -19,15 +19,6 @@ func (s Service) UpdateConfiguredProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	if s.deps.SandboxOwnership != nil {
-		managed, err := s.deps.SandboxOwnership.Execute(ctx, providerID)
-		if err != nil {
-			return catalogdomain.Provider{}, err
-		}
-		if managed {
-			return catalogdomain.Provider{}, fmt.Errorf("%w: Provider belongs to a Sandbox Tool Suite", ErrProviderInUse)
-		}
-	}
 	currentProvider, err := s.deps.Catalog.Get(ctx, providerID)
 	if err != nil {
 		return catalogdomain.Provider{}, err
@@ -47,7 +38,7 @@ func (s Service) UpdateConfiguredProvider(
 			err,
 		)
 	}
-	if s.deps.IsManagedFacade(currentConfig.PluginID) {
+	if s.deps.IsRetiredProviderID != nil && s.deps.IsRetiredProviderID(currentConfig.PluginID) {
 		return catalogdomain.Provider{}, fmt.Errorf("%w: Provider belongs to a resource-owned Tool Suite", ErrProviderInUse)
 	}
 	resolved, err := s.deps.Resolver.Resolve(ctx, currentConfig)

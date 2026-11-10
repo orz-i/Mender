@@ -40,26 +40,6 @@ func (s Service) DeleteConfiguredProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
-	// Managed Agent facades cannot be torn down through Provider CRUD;
-	// otherwise CloseProvider would run before the persisted guard fails.
-	if s.deps.AgentOwnership != nil {
-		managed, err := s.deps.AgentOwnership.Execute(ctx, providerID)
-		if err != nil {
-			return err
-		}
-		if managed {
-			return fmt.Errorf("%w: Provider is owned by an Agent Tool Suite", ErrProviderInUse)
-		}
-	}
-	if s.deps.SandboxOwnership != nil {
-		managed, err := s.deps.SandboxOwnership.Execute(ctx, providerID)
-		if err != nil {
-			return err
-		}
-		if managed {
-			return fmt.Errorf("%w: Provider belongs to a Sandbox Tool Suite", ErrProviderInUse)
-		}
-	}
 	if err := s.EnsureProviderUnused(ctx, providerID); err != nil {
 		return err
 	}

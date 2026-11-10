@@ -14,9 +14,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) {
+func TestRefreshAgentOwnedToolsPreservesIdentityAndProfileGrants(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "ready-facade.db")
+	path := filepath.Join(t.TempDir(), "v3-agent.db")
 	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: path, AgentExecutor: fixtureAgentExecutor{}})
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Simulate the former persisted model-only Tool schema on a Ready facade.
+	// Simulate a stale schema in a canonical Agent-owned Tool row.
 	legacy := []byte(`{"type":"object","required":["prompt"],"properties":{"prompt":{"type":"string"},"model":{"type":"string"}}}`)
 	if _, err := raw.ExecContext(ctx, "UPDATE tools SET input_schema=? WHERE id=?", legacy, delegateID); err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fresh.ProviderID != before.ProviderID || len(fresh.Tools) != len(before.Tools) {
+	if len(fresh.Tools) != len(before.Tools) {
 		t.Fatalf("refresh cloned Provider/Tools %+v", fresh)
 	}
 	for i, item := range fresh.Tools {
@@ -77,11 +77,17 @@ func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) 
 			t.Fatal("refresh rotated canonical Tool ID")
 		}
 	}
-	pid, err := catalogdomain.ParseProviderID(fresh.ProviderID)
+	source, err := catalogdomain.AgentSource(string(agent.ID()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	tools, err := r.Catalog.store.ListProviderTools(ctx, pid)
+	providerless, ok := r.Catalog.store.(interface {
+		ListSourceTools(context.Context, catalogdomain.SourceRef) ([]catalogdomain.Tool, error)
+	})
+	if !ok {
+		t.Fatal("typed Catalog source lookup unavailable")
+	}
+	tools, err := providerless.ListSourceTools(ctx, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +99,7 @@ func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) 
 		}
 	}
 	if !updated {
-		t.Fatal("Ready facade retained stale delegation input schema")
+		t.Fatal("Agent source retained stale delegation input schema")
 	}
 	grants, err := r.Agents.Grants(ctx, agent.ID(), owner)
 	if err != nil || len(grants) != 1 || grants[0] != profile.ID().String() {

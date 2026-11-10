@@ -55,12 +55,6 @@ func registerConfiguredProviderTest(
 ) (catalogdomain.Provider, error) {
 	t.Helper()
 	caller := testCatalogGovernanceContext(t, governancedomain.OriginInternal, "register")
-	if isManagedProviderFacade(pluginID) {
-		// Historical fixture only: construct a pre-ownership Provider so
-		// adoption/conflict tests can prove that identities remain unchanged.
-		// Production HTTP/CLI and exported Runtime creation stay denied.
-		return runtime.registerConfiguredProvider(ctx, request, pluginID, rawConfig, caller, true)
-	}
 	return runtime.RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, caller)
 }
 
@@ -137,13 +131,6 @@ func syncConfiguredProviderTest(
 ) (catalogapplication.SyncProviderToolsResult, error) {
 	t.Helper()
 	governance := testCatalogGovernanceContext(t, governancedomain.OriginInternal, "sync")
-	config, err := runtime.ProviderConfig(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, err
-	}
-	if isManagedProviderFacade(config.PluginID) {
-		return runtime.syncConfiguredProviderForOwner(ctx, providerID, governance, true)
-	}
 	return runtime.SyncConfiguredProvider(ctx, providerID, governance)
 }
 

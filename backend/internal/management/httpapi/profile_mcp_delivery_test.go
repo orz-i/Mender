@@ -12,7 +12,9 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapp "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	mcpdelivery "github.com/orz-i/Mender/backend/internal/mcp/application/delivery"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	profile "github.com/orz-i/Mender/backend/internal/profile/domain"
 	tunnelapp "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnel "github.com/orz-i/Mender/backend/internal/tunnel/domain"
@@ -166,14 +168,22 @@ func httpMCPDeliveryFixture(t *testing.T) (*bootstrap.Runtime, *httptest.Server,
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Close() })
-	provider, err := runtime.Catalog.RegisterProvider.Execute(ctx, catalogapp.RegisterProviderRequest{Namespace: "delivery-tools", DisplayName: "Delivery metadata"})
+	caller, err := gov.NewContext(gov.OriginInternal, runtime.OwnerPrincipal(), gov.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := runtime.RegisterConfiguredProvider(ctx, catalogapp.RegisterProviderRequest{Namespace: "delivery-tools", DisplayName: "Delivery metadata"}, mcpplugin.ID, []byte(`{"transport":{"kind":"streamable-http","endpoint":"http://127.0.0.1:1/mcp"}}`), caller)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runtime.Catalog.SyncProviderTools(deliveryHTTPToolSource{}).Execute(ctx, provider.ID()); err != nil {
 		t.Fatal(err)
 	}
-	selected, err := runtime.Catalog.BrowseTools.Execute(ctx, catalogapp.BrowseToolsRequest{Limit: 10})
+	ref, err := catalog.ProviderSource(provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := runtime.Catalog.BrowseTools.Execute(ctx, catalogapp.BrowseToolsRequest{Limit: 10, SourceRef: &ref})
 	if err != nil {
 		t.Fatal(err)
 	}

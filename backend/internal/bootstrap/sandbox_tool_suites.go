@@ -21,14 +21,12 @@ type SandboxTool struct {
 }
 
 type SandboxToolSuite struct {
-	SuiteID      suitedomain.ID   `json:"suiteId"`
-	SandboxID    sandboxdomain.ID `json:"sandboxId"`
-	Status       string           `json:"status"`
-	ProviderID   string           `json:"providerId,omitempty"`
-	ProviderName string           `json:"providerName,omitempty"`
-	Available    bool             `json:"available"`
-	Issue        string           `json:"issue,omitempty"`
-	Tools        []SandboxTool    `json:"tools"`
+	SuiteID   suitedomain.ID   `json:"suiteId"`
+	SandboxID sandboxdomain.ID `json:"sandboxId"`
+	Status    string           `json:"status"`
+	Available bool             `json:"available"`
+	Issue     string           `json:"issue,omitempty"`
+	Tools     []SandboxTool    `json:"tools"`
 }
 
 func (r *Runtime) ListToolSuiteDefinitions(ctx context.Context) ([]suitedomain.Definition, error) {
@@ -143,19 +141,4 @@ func (r *Runtime) SandboxWorkspaceTools(ctx context.Context, id sandboxdomain.ID
 		return SandboxToolSuite{}, err
 	}
 	return r.listNativeSandboxTools(ctx, id, caller, suitedomain.SandboxWorkspace, "workspace", available, issue)
-}
-
-// This former "prepare tools" management action no longer creates a Provider.
-// Catalog metadata is intrinsic to the Mender native source.
-func (r *Runtime) EnsureSandboxWorkspaceTools(ctx context.Context, id sandboxdomain.ID, caller gov.Context) (SandboxToolSuite, error) {
-	return r.SandboxWorkspaceTools(ctx, id, caller)
-}
-
-// Generic native Workspace Tools cannot be deleted from a Sandbox: this
-// would implicitly revoke unrelated Profiles or delete a shared ToolID.
-func (r *Runtime) RemoveSandboxWorkspaceTools(ctx context.Context, id sandboxdomain.ID, caller gov.Context) error {
-	if _, err := r.SandboxWorkspaceTools(ctx, id, caller); err != nil {
-		return err
-	}
-	return sandboxdomain.ErrConflict
 }

@@ -11,34 +11,26 @@ import (
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	sourcecatalog "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sourcecatalog"
 	credential "github.com/orz-i/Mender/backend/internal/credential/domain"
-	migration "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	profile "github.com/orz-i/Mender/backend/internal/profile/domain"
 	profilesqlite "github.com/orz-i/Mender/backend/internal/profile/infrastructure/sqlite"
 	typedsupply "github.com/orz-i/Mender/backend/internal/profile/infrastructure/typedsupply"
+	v2fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v2"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
 	_ "modernc.org/sqlite"
 )
 
 func typedProfileCandidate(t *testing.T) (string, string) {
 	t.Helper()
-	ctx := context.Background()
-	legacy := filepath.Join(t.TempDir(), "legacy.sqlite")
-	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: legacy})
+	legacy := v2fixture.EmptyDatabase(t)
+	v3 := filepath.Join(t.TempDir(), "v3.sqlite")
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{DatabasePath: v3})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := migration.AssessPath(ctx, legacy)
-	if err != nil || plan.Status != "ready" {
-		t.Fatalf("empty legacy fixture is not eligible: %+v, %v", plan.Conflicts, err)
-	}
-	artifact, err := migration.StageCopy(ctx, legacy, filepath.Join(t.TempDir(), "candidate.sqlite"), plan.ManifestDigest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return legacy, artifact.CandidatePath
+	return legacy, v3
 }
 
 func TestOpenTypedReusesProfilePersistenceWithoutCreatingAnyGrants(t *testing.T) {
@@ -131,12 +123,11 @@ func TestOpenTypedReusesProfilePersistenceWithoutCreatingAnyGrants(t *testing.T)
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='agent_tool_facades'").Scan(&oldTables); err != nil || oldTables != 0 {
 		t.Fatalf("typed Profile store reintroduced legacy facade: %d %v", oldTables, err)
 	}
-	// The original legacy source is untouched; it can be inspected by the
-	// existing reader while the disposable candidate is used for tests only.
-	plan, err := migration.AssessPath(ctx, source)
-	if err != nil || plan.Status != "ready" {
-		t.Fatalf("typed Profile Store changed legacy source: %v status=%s", err, plan.Status)
+	// The historical input remains a distinct rejected schema, not a migration source.
+	if _, err := profilesqlite.OpenTyped(ctx, source); err == nil {
+		t.Fatal("v2 source accepted as v3")
 	}
+
 }
 
 func TestOpenTypedRefusesLegacyPartialAndMissingDatabases(t *testing.T) {

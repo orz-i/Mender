@@ -132,7 +132,7 @@ func (r *Runtime) openAgentTaskToolCapability(ctx context.Context,
 	if err != nil {
 		return "", err
 	}
-	if suite.Status != "ready" || suite.ProviderID != "" {
+	if suite.Status != "ready" {
 		return "", agentdomain.ErrUnavailable
 	}
 	sources := make(map[catalogdomain.ToolID]string, len(suite.Tools))

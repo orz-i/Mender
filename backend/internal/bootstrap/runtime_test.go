@@ -48,6 +48,7 @@ func TestRuntimeExecutesBuiltInToolThroughFullPipeline(t *testing.T) {
 		t.Fatalf("RegisterProvider.Execute() error = %v", err)
 	}
 
+	configureAttachedMCPProviderTest(t, runtime, context.Background(), provider.ID())
 	syncTools := runtime.Catalog.SyncProviderTools(staticSource{
 		tools: []application.DiscoveredTool{
 			{

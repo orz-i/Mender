@@ -17,6 +17,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	sourcecatalog "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sourcecatalog"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
@@ -394,12 +395,14 @@ paths:
 	}
 
 	sourceRevision.Store(3)
-	syncResult, err = syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
-	if err != nil {
-		t.Fatalf("removal sync error = %v", err)
+	// A source refresh cannot implicitly retire a previously granted ToolID.
+	_, err = syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
+	if !errors.Is(err, sourcecatalog.ErrRetirementRequiresReview) {
+		t.Fatalf("silent Tool retirement was not rejected: %v", err)
 	}
-	if syncResult.Removed != 1 || syncResult.Total != 0 {
-		t.Fatalf("removal sync = %+v", syncResult)
+	still, err := runtime.Catalog.DescribeTool.Execute(ctx, toolID)
+	if err != nil || still.ID() != toolID {
+		t.Fatalf("failed refresh retired ToolID: %v", err)
 	}
 }
 

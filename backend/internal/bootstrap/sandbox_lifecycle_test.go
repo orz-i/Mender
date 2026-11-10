@@ -2,19 +2,15 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 func localSandboxCaller(t *testing.T, r *Runtime) governancedomain.Context {
@@ -96,58 +92,6 @@ func TestSandboxLocalLifecycleDurableLeasesAcrossRuntimes(t *testing.T) {
 	}
 	if events[0].Action != governancedomain.ActionSandboxStart || events[0].Generation != 2 || events[1].Action != governancedomain.ActionSandboxStop {
 		t.Fatalf("event order %+v", events)
-	}
-}
-
-func TestSandboxDestroyConflictsWithWorkspaceProviderAndPreservesHostFiles(t *testing.T) {
-	ctx := context.Background()
-	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "reference.db")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = r.Close() }()
-	root := t.TempDir()
-	file := filepath.Join(root, "important.txt")
-	if err := os.WriteFile(file, []byte("keep this"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	item, caller := createdLocalSandbox(t, r, root)
-	raw, err := json.Marshal(workspaceplugin.Config{SandboxID: item.ID().String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := r.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "lifecycle-reference", DisplayName: "Workspace"}, workspaceplugin.ID, raw, caller, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.Sandboxes.ChangeLocalLifecycle(ctx, item.ID(), governancedomain.ActionSandboxDestroy, caller); !errors.Is(err, sandboxdomain.ErrConflict) {
-		t.Fatalf("referenced Sandbox destroyed: %v", err)
-	}
-	if err := r.providerConfigs.Delete(ctx, provider.ID()); err != nil {
-		t.Fatal(err)
-	}
-	destroyed, err := r.Sandboxes.ChangeLocalLifecycle(ctx, item.ID(), governancedomain.ActionSandboxDestroy, caller)
-	if err != nil || destroyed.State != sandboxdomain.StateDestroyed {
-		t.Fatalf("destroy %+v %v", destroyed, err)
-	}
-	// #nosec G304 -- test fixture file path is constructed under t.TempDir().
-	contents, err := os.ReadFile(file)
-	if err != nil || string(contents) != "keep this" {
-		t.Fatalf("destroy removed host files: %q %v", contents, err)
-	}
-	if _, err := r.Sandboxes.router.Resolve(ctx, item.ID(), sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrConflict) {
-		t.Fatalf("destroyed run still routable: %v", err)
-	}
-	v2, err := providerplugin.NewConfiguration(provider.ID(), workspaceplugin.ID, 2, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.providerConfigs.Save(ctx, v2); err == nil {
-		t.Fatal("raw DB writer bound Provider to destroyed Sandbox")
-	}
-	events, err := r.Sandboxes.LifecycleEvents(ctx, item.ID(), 10)
-	if err != nil || len(events) != 1 || events[0].Action != governancedomain.ActionSandboxDestroy {
-		t.Fatalf("destroy audit %+v %v", events, err)
 	}
 }
 

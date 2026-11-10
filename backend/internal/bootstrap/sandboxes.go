@@ -57,19 +57,8 @@ type Sandboxes struct {
 	profileExists              func(context.Context, profiledomain.ProfileID) error
 }
 
-func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver, profileExists func(context.Context, profiledomain.ProfileID) error) (*Sandboxes, error) {
-	if policy == nil || approval == nil || governance == nil || governance.processIsolation == nil || profileExists == nil {
-		return nil, fmt.Errorf("compose sandboxes: policy/approval unavailable")
-	}
-	store, err := sandboxsqlite.Open(ctx, databasePath)
-	if err != nil {
-		return nil, fmt.Errorf("compose sandboxes: %w", err)
-	}
-	return composeSandboxes(ctx, databasePath, store, store, policy, approval, governance, credentials, profileExists)
-}
-
-// NewTypedSandboxes uses the SAME Sandbox application/router and real backends,
-// but admits leases only through the reviewed v3 Profile/Workspace grant table.
+// NewTypedSandboxes composes the official Sandbox application/router/backends
+// and admits native leases only with reviewed v3 Profile/Workspace grants.
 // Neither calling this constructor nor opening a typed DB starts a remote job.
 func NewTypedSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver, profileExists func(context.Context, profiledomain.ProfileID) error) (*Sandboxes, error) {
 	if policy == nil || approval == nil || governance == nil || governance.processIsolation == nil || profileExists == nil {

@@ -23,6 +23,7 @@ func pluginTestTool(t *testing.T, r *Runtime, ctx context.Context) catalogdomain
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureAttachedMCPProviderTest(t, r, ctx, provider.ID())
 	schema, err := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
 	if err != nil {
 		t.Fatal(err)

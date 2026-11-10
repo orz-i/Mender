@@ -174,17 +174,17 @@ func TestGenericACPTaskToolsUseExistingMenderGovernedInvocation(t *testing.T) {
 	}
 	// No extra Tool IDs were introduced to the Catalog, and the fixture was an
 	// existing Grok identity: MCP capability, not Agent brand, enabled supply.
-	counts, err := f.runtime.Catalog.store.ListProviderTools(ctx, func() catalogdomain.ProviderID {
-		tools, err := f.runtime.SandboxWorkspaceTools(ctx, f.sandbox.ID(), f.owner)
-		if err != nil {
-			t.Fatal(err)
-		}
-		parsed, err := catalogdomain.ParseProviderID(tools.ProviderID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return parsed
-	}())
+	source, err := catalogdomain.NativeSource("workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup, ok := f.runtime.Catalog.store.(interface {
+		ListSourceTools(context.Context, catalogdomain.SourceRef) ([]catalogdomain.Tool, error)
+	})
+	if !ok {
+		t.Fatal("typed Catalog inventory unavailable")
+	}
+	counts, err := lookup.ListSourceTools(ctx, source)
 	if err != nil || len(counts) != 4 {
 		t.Fatalf("canonical Tool inventory changed: %d %v", len(counts), err)
 	}

@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,14 +13,10 @@ import (
 	"time"
 
 	mobyclient "github.com/moby/moby/client"
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sand "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sanddocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
-	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 // The opt-in live gate proves the Desktop's fixed-path automatic discovery
@@ -228,61 +223,8 @@ func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
 			}
 		}
 	}()
-	raw, err := json.Marshal(workspaceplugin.Config{SandboxID: item.ID().String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := runtime.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "docker-test", DisplayName: "Docker Workspace"}, workspaceplugin.ID, raw, caller, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	synced, err := runtime.syncConfiguredProviderForOwner(ctx, provider.ID(), caller, true)
-	if err != nil || synced.Total != 4 {
-		t.Fatalf("Docker provider Sync %+v %v", synced, err)
-	}
-	tools, err := runtime.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := map[string]catalogdomain.ToolID{}
-	for _, tool := range tools {
-		ids[tool.SourceKey()] = tool.ID()
-	}
-	invoke := func(sourceKey, arguments string) map[string]any {
-		t.Helper()
-		toolID, ok := ids[sourceKey]
-		if !ok {
-			t.Fatalf("missing Tool SourceKey: %s", sourceKey)
-		}
-		response, err := runtime.CallConfiguredTool(ctx, toolID, []byte(arguments), caller)
-		if err != nil || response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
-			t.Fatalf("%s: outcome %s, err %v", sourceKey, response.Outcome.Kind(), err)
-		}
-		var result map[string]any
-		if err := json.Unmarshal(response.Outcome.Content().Bytes(), &result); err != nil {
-			t.Fatal(err)
-		}
-		return result
-	}
-	invoke("workspace.edit", `{"path":"notes.txt","operation":"create","content":"hello Docker\n"}`)
-	read := invoke("workspace.read", `{"path":"notes.txt"}`)
-	if read["content"] != "hello Docker" {
-		t.Fatalf("Docker read %+v", read)
-	}
-	match := invoke("workspace.search", `{"mode":"content","query":"Docker"}`)
-	if len(match["matches"].([]any)) != 1 {
-		t.Fatalf("Docker search %+v", match)
-	}
-	executed := invoke("workspace.shell", `{"command":"cat notes.txt; id -u; test ! -e /var/run/docker.sock; echo socket=$?"}`)
-	if executed["exitCode"] != float64(0) || !strings.Contains(fmt.Sprint(executed["stdout"]), "hello Docker") || !strings.Contains(fmt.Sprint(executed["stdout"]), "10001") {
-		t.Fatalf("Docker shell %+v", executed)
-	}
-	if _, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxDestroy, caller); err == nil {
-		t.Fatal("destroyed Sandbox with live Workspace Provider binding")
-	}
-	if err := runtime.providerConfigs.Delete(ctx, provider.ID()); err != nil {
-		t.Fatal(err)
-	}
+	// Native Workspace ToolIDs are canonical and independent of this Sandbox;
+	// this opt-in integration validates real Sandbox lifecycle only.
 	stopped, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxStop, caller)
 	if err != nil || stopped.State != sand.StateStopped {
 		t.Fatalf("Docker stopped state %+v %v", stopped, err)

@@ -7,14 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	agentapp "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	migration "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	"github.com/orz-i/Mender/backend/internal/profile/infrastructure/typedsupply"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	v2fixture "github.com/orz-i/Mender/backend/internal/testfixtures/v2"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
 	_ "modernc.org/sqlite"
 )
@@ -24,7 +25,6 @@ const profileB = "prof_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 type futureProfileFixture struct {
 	path         string
-	sourcePath   string
 	sandboxID    string
 	workspaceID  string
 	agentID      string
@@ -36,7 +36,7 @@ type futureProfileFixture struct {
 func futureFixture(t *testing.T) *futureProfileFixture {
 	t.Helper()
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "legacy.sqlite")
+	path := filepath.Join(t.TempDir(), "v3.sqlite")
 	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: path})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func futureFixture(t *testing.T) *futureProfileFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	suite, err := runtime.EnsureSandboxWorkspaceTools(ctx, sb.ID(), owner)
+	suite, err := runtime.SandboxWorkspaceTools(ctx, sb.ID(), owner)
 	if err != nil || len(suite.Tools) != 4 {
 		t.Fatalf("Suite %v %+v", err, suite)
 	}
@@ -72,24 +72,23 @@ func futureFixture(t *testing.T) *futureProfileFixture {
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	review, err := migration.AssessPath(ctx, path)
-	if err != nil || review.Status != "ready" {
-		t.Fatalf("Stage E fixture not ready: %v %+v", err, review.Conflicts)
-	}
-	converted, err := migration.StageCopy(ctx, path, filepath.Join(t.TempDir(), "future.sqlite"), review.ManifestDigest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := sql.Open("sqlite", converted.CandidatePath)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	var workspaceID string
-	err = db.QueryRow("SELECT workspace_id FROM workspace_placements WHERE sandbox_id=?", sb.ID().String()).Scan(&workspaceID)
-	if err != nil {
-		t.Fatal(err)
+	workspaceID := "wrk_33333333333333333333333333333333"
+	for _, stmt := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO workspaces(workspace_id,owner_kind,owner_ref,display_name,verified_root,created_at) VALUES(?,?,?,?,?,?)`, []any{workspaceID, string(owner.Principal().Kind()), owner.Principal().Reference(), "Test Workspace", root, time.Now().UTC().Format(time.RFC3339Nano)}},
+		{`INSERT INTO workspace_placements(workspace_id,sandbox_id,backend_root,verified_revision) VALUES(?,?,?,1)`, []any{workspaceID, sb.ID().String(), root}},
+	} {
+		if _, err := db.ExecContext(ctx, stmt.query, stmt.args...); err != nil {
+			t.Fatal(err)
+		}
 	}
 	tools, err := curated.PlannedNativeTools()
 	if err != nil {
@@ -104,7 +103,7 @@ func futureFixture(t *testing.T) *futureProfileFixture {
 	if nativeReadID == "" {
 		t.Fatal("missing host reviewed native read ToolID")
 	}
-	fixture := &futureProfileFixture{path: converted.CandidatePath, sourcePath: path,
+	fixture := &futureProfileFixture{path: path,
 		sandboxID: sb.ID().String(), workspaceID: workspaceID, agentID: string(agent.ID()), nativeReadID: nativeReadID, db: db}
 	for _, item := range agentSuite.Tools {
 		fixture.agentToolIDs = append(fixture.agentToolIDs, item.ToolID)
@@ -248,20 +247,13 @@ func TestTypedProfileNoCrossProfileSourceDisclosure(t *testing.T) {
 	}
 }
 func TestTypedSupplyRejectsLegacySchemaWithoutMigration(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.sqlite")
-	r, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{DatabasePath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Close(); err != nil {
-		t.Fatal(err)
-	}
+	path := v2fixture.EmptyDatabase(t)
 	reader, err := typedsupply.Open(context.Background(), path)
 	if reader != nil {
 		_ = reader.Close()
 	}
 	if !errors.Is(err, typedsupply.ErrTypedSchemaRequired) {
-		t.Fatalf("legacy Provider schema silently accepted: %v", err)
+		t.Fatalf("legacy Provider schema accepted: %v", err)
 	}
 }
 func TestDirectExportCollisionFailsClosed(t *testing.T) {

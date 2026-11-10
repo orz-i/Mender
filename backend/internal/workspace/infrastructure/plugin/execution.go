@@ -1,10 +1,12 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	invocation "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
@@ -135,4 +137,27 @@ func mapResult(result any, err error, maxResultBytes int) (invocation.Outcome, e
 		return invocation.CompleteWithResultSize(content, originalBytes)
 	}
 	return invocation.Complete(content)
+}
+
+const (
+	sourceKeyRead   = "workspace.read"
+	sourceKeySearch = "workspace.search"
+	sourceKeyEdit   = "workspace.edit"
+	sourceKeyShell  = "workspace.shell"
+)
+
+func decodeStrict(raw []byte, target any, label string) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("%s: multiple JSON values", label)
+		}
+		return fmt.Errorf("%s: trailing data: %w", label, err)
+	}
+	return nil
 }

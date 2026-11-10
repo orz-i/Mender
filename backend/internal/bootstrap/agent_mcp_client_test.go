@@ -2,16 +2,14 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	agentapp "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
-	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
-	catalogapp "github.com/orz-i/Mender/backend/internal/catalog/application"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 )
 
@@ -30,32 +28,13 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	}
 	defer func() { _ = r.Close() }()
 	owner := agentOwnerContext(t, r)
-	agent, err := r.Agents.Create(ctx, agentapp.CreateRequest{
+	agent, err := r.CreateAgentWithTools(ctx, agentapp.CreateRequest{
 		Name: "MCP Fixture", Backend: agentdomain.BackendCodex, WorkspaceRoot: t.TempDir(),
 	}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config, err := json.Marshal(map[string]string{"agentId": string(agent.ID())})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := registerConfiguredProviderTest(t, r, ctx, catalogapp.RegisterProviderRequest{
-		Namespace: "agent-mcp-fixture", DisplayName: "Agent MCP Fixture",
-	}, agentdelegation.ID, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = r.syncConfiguredProviderForOwner(ctx, provider.ID(), owner, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.agentStore.ClaimToolFacade(ctx, agent.ID(), provider.ID().String()); err != nil {
-		t.Fatalf("fixture Agent must own its delegate facade: %v", err)
-	}
-	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
+	ids := agentOwnedToolIDs(t, r, ctx, agent.ID(), owner)
 	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
 		Slug: "agent-mcp", DisplayName: "Agent MCP Fixture",
 	}, "direct")
@@ -63,11 +42,8 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tool := range tools {
-		profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
-			ProfileSlug: profile.Slug(), ToolID: tool.ID(),
-		}, true)
-
+	for _, id := range ids {
+		profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: id}, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,6 +52,17 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	// the protocol exercise budget. Start that budget once the fixture exists.
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
+	preGrant, err := r.typedSupply.Project(ctx, profile.ID().String())
+	if err != nil || len(preGrant.Sources) != 0 {
+		t.Fatalf("Agent Tool Source leaked before grant: %+v %v", preGrant, err)
+	}
+	if err := r.Agents.Grant(ctx, agent.ID(), profile.ID().String(), owner); err != nil {
+		t.Fatal(err)
+	}
+	profile, err = r.Profiles.Get.Execute(ctx, profile.Slug())
+	if err != nil {
+		t.Fatal(err)
+	}
 	adapter, err := r.NewMCPServer(ctx, profile)
 	if err != nil {
 		t.Fatal(err)
@@ -96,29 +83,23 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := map[string]string{}
-	for _, tool := range listed.Tools {
-		names[tool.Name] = tool.Name
-
+	delegate, resultName, resumeName := "", "", ""
+	for _, item := range listed.Tools {
+		switch {
+		case strings.HasSuffix(item.Name, "__delegate"):
+			delegate = item.Name
+		case strings.HasSuffix(item.Name, "__result"):
+			resultName = item.Name
+		case strings.HasSuffix(item.Name, "__resume"):
+			resumeName = item.Name
+		}
 	}
-	delegate := "agent-mcp-fixture__delegate"
-	resultName := "agent-mcp-fixture__result"
-	if names[delegate] == "" || names[resultName] == "" {
-		t.Fatalf("fixture Agent tools missing from real MCP list: %+v", listed.Tools)
+	if delegate == "" || resultName == "" || resumeName == "" {
+		t.Fatalf("Agent owned MCP tools missing: %+v", listed.Tools)
 	}
 	invoke := func(name string, args map[string]string) (*mcp.CallToolResult, error) {
 		t.Helper()
 		return session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	}
-	denied, err := invoke(delegate, map[string]string{"prompt": "before grant"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !denied.IsError {
-		t.Fatal("MCP Profile delegated Agent without AgentGrant")
-	}
-	if err := r.Agents.Grant(ctx, agent.ID(), profile.ID().String(), owner); err != nil {
-		t.Fatal(err)
 	}
 	submitted, err := invoke(delegate, map[string]string{"prompt": "MCP delegated fixture"})
 	if err != nil || submitted.IsError {
@@ -164,7 +145,7 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resumeErr, err := invoke("agent-mcp-fixture__resume", map[string]string{
+	resumeErr, err := invoke(resumeName, map[string]string{
 		"taskId": id, "prompt": "must not be replayed",
 	})
 	if err != nil || resumeErr == nil || !resumeErr.IsError {
@@ -183,10 +164,7 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	revoked, err := invoke(delegate, map[string]string{"prompt": "after revoke"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !revoked.IsError {
+	if err == nil && (revoked == nil || !revoked.IsError) {
 		t.Fatal("revoked MCP Profile submitted task")
 	}
 }

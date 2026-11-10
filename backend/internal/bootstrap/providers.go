@@ -7,15 +7,12 @@ import (
 	"slices"
 	"strings"
 
-	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
-	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 const (
@@ -51,12 +48,11 @@ const (
 	providerPluginIssueResolveDescriptor = "descriptor_resolution_failed"
 )
 
-// isManagedProviderFacade identifies host-owned resource Tool Suite adapters.
-// Their Provider/Tool identities stay in the technical registry, never the
-// user-selectable Provider creation catalogue.
-func isManagedProviderFacade(id providerplugin.ID) bool {
+// isRetiredInternalProviderID blocks the three removed private Provider identities from independent registration.
+// No adapter or runtime compatibility path is registered for these IDs.
+func isRetiredInternalProviderID(id providerplugin.ID) bool {
 	switch id {
-	case agentdelegation.ID, workspaceplugin.ID, sshjobsplugin.ID:
+	case providerplugin.ID("io.mender.provider.agent-delegation"), providerplugin.ID("io.mender.provider.workspace"), providerplugin.ID("io.mender.provider.sandbox-jobs"):
 		return true
 	default:
 		return false
@@ -69,7 +65,7 @@ func (r *Runtime) ProviderPluginDescriptors() []providerplugin.Descriptor {
 		return nil
 	}
 	return slices.DeleteFunc(r.providerPlugins.Descriptors(), func(d providerplugin.Descriptor) bool {
-		return isManagedProviderFacade(d.ID)
+		return isRetiredInternalProviderID(d.ID)
 	})
 }
 
@@ -87,8 +83,7 @@ func (r *Runtime) ProviderPluginDescriptorForConfig(
 		)
 	}
 	if config.InstallationID == nil {
-		// Exact persisted, already-authorized facades must remain resolvable
-		// even when their private plugin is absent from the public catalogue.
+		// Only actual installed/configured Provider plugins may be resolved.
 		descriptor, err := r.providerPlugins.Lookup(config.PluginID)
 		if err != nil {
 			return providerplugin.Descriptor{}, false, nil
@@ -254,23 +249,6 @@ func (r *Runtime) RegisterConfiguredProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	return r.providerManagement().RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext)
-}
-
-// registerConfiguredProvider admits private Tool Suite facade creation only
-// when called by an Agent/Sandbox resource-owner use case, never generic
-// Provider CRUD, CLI, HTTP or model-controlled arguments.
-func (r *Runtime) registerConfiguredProvider(
-	ctx context.Context,
-	request catalogapplication.RegisterProviderRequest,
-	pluginID providerplugin.ID,
-	rawConfig json.RawMessage,
-	governanceContext governancedomain.Context,
-	managedFacade bool,
-) (catalogdomain.Provider, error) {
-	if managedFacade {
-		return r.providerManagement().RegisterManagedFacade(ctx, request, pluginID, rawConfig, governanceContext)
-	}
 	return r.providerManagement().RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext)
 }
 

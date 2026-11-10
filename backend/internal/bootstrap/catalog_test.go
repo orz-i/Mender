@@ -11,11 +11,15 @@ import (
 func TestCatalogCompositionRegistersAndLoadsProvider(t *testing.T) {
 	t.Parallel()
 
-	catalog, err := NewCatalog(context.Background(), CatalogOptions{
-		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
-	})
+	path := filepath.Join(t.TempDir(), "mender.db")
+	runtime, err := NewRuntime(context.Background(), RuntimeOptions{DatabasePath: path})
 	if err != nil {
-		t.Fatalf("NewCatalog() error = %v", err)
+		t.Fatalf("NewRuntime v3: %v", err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+	catalog, err := NewTypedCatalog(context.Background(), CatalogOptions{DatabasePath: path})
+	if err != nil {
+		t.Fatalf("NewTypedCatalog() error = %v", err)
 	}
 	t.Cleanup(func() {
 		if err := catalog.Close(); err != nil {

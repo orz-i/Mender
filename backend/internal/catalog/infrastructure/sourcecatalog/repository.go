@@ -416,3 +416,49 @@ func normalizedFTSQuery(query string) (string, error) {
 	}
 	return strings.Join(quoted, " AND "), nil
 }
+
+// RetireOwnedAgent atomically removes a no-longer-referenced Agent and its
+// canonical ToolIDs. The caller must have passed Agent ownership admission.
+// Database triggers enforce Profile/ToolID/Policy integrity at the commit
+// point; Task history, unknown outcomes and explicit Agent grants block
+// retirement. Audit history is intentionally left immutable.
+func (r *Repository) RetireOwnedAgent(ctx context.Context, source catalog.SourceRef) error {
+	if r == nil || r.db == nil || r.owner == nil || source.Kind() != catalog.SourceAgent {
+		return ErrUnverifiedSource
+	}
+	if err := r.owner.VerifySourceOwner(ctx, source); err != nil {
+		return fmt.Errorf("retire owned Agent: %w", err)
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var present int
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM agents WHERE agent_id=?)`, source.ID()).Scan(&present); err != nil || present != 1 {
+		return fmt.Errorf("retire owned Agent: source no longer exists or is unverified: %w", ErrUnverifiedSource)
+	}
+	for _, query := range []string{
+		`SELECT EXISTS(SELECT 1 FROM agent_tasks WHERE agent_id=?)`,
+		`SELECT EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=?)`,
+		`SELECT EXISTS(SELECT 1 FROM policy_rules r,json_each(CASE WHEN json_valid(r.match_json) THEN r.match_json ELSE '{}' END,'$.agentIds') v WHERE v.value=?)`,
+	} {
+		var referenced int
+		if err = tx.QueryRowContext(ctx, query, source.ID()).Scan(&referenced); err != nil {
+			return err
+		}
+		if referenced != 0 {
+			return fmt.Errorf("retire owned Agent: resource still referenced: %w", ErrRetirementRequiresReview)
+		}
+	}
+	for _, query := range []string{
+		`DELETE FROM tools_fts WHERE tool_id IN (SELECT id FROM tools WHERE source_kind='agent' AND source_id=?)`,
+		`DELETE FROM tools WHERE source_kind='agent' AND source_id=?`,
+		`DELETE FROM agents WHERE agent_id=?`,
+	} {
+		if _, err = tx.ExecContext(ctx, query, source.ID()); err != nil {
+			return fmt.Errorf("retire owned Agent: atomic retirement: %w", err)
+		}
+	}
+	return tx.Commit()
+}

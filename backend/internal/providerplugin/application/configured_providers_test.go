@@ -33,7 +33,7 @@ func TestRegisterAdmissionRejectsBeforePluginWorkAndCompensatesIdentity(t *testi
 func TestGenericRegistrationCannotAcquireManagedFacadeAuthority(t *testing.T) {
 	t.Parallel()
 	deps, catalog, _, plugin := managementFixture(t)
-	deps.IsManagedFacade = func(providerplugin.ID) bool { return true }
+	deps.IsRetiredProviderID = func(providerplugin.ID) bool { return true }
 	_, err := NewService(deps).RegisterConfiguredProvider(t.Context(), catalogapplication.RegisterProviderRequest{},
 		plugin.descriptor.ID, json.RawMessage(`{}`), managementContext(t))
 	if !errors.Is(err, sandboxdomain.ErrNotAuthorized) || catalog.registered != 0 || plugin.validated != 0 {
@@ -122,7 +122,7 @@ func managementFixture(t *testing.T) (Dependencies, *catalogFixture, *configurat
 	configs := &configurationsFixture{original: config, current: config}
 	resolver := resolverFixture{plugin: plugin}
 	return Dependencies{Catalog: catalog, Configurations: configs, Builtins: resolver, Resolver: resolver, Installations: resolver,
-		Activation: activationFixture{}, Clock: managementClock{now}, IsManagedFacade: func(providerplugin.ID) bool { return false }}, catalog, configs, plugin
+		Activation: activationFixture{}, Clock: managementClock{now}, IsRetiredProviderID: func(providerplugin.ID) bool { return false }}, catalog, configs, plugin
 }
 
 func managementContext(t *testing.T) governancedomain.Context {

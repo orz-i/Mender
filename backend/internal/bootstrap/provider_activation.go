@@ -18,17 +18,6 @@ func (r *Runtime) SyncConfiguredProvider(
 	return r.providerManagement().SyncConfiguredProvider(ctx, providerID, governanceContext)
 }
 
-// Only resource-owned Tool Suite workflows may synchronize their private
-// Providers. Generic Provider sync cannot redefine a managed Tool snapshot.
-func (r *Runtime) syncConfiguredProviderForOwner(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-	governanceContext governancedomain.Context,
-	resourceOwner bool,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	return r.providerManagement().SyncConfiguredProviderForOwner(ctx, providerID, governanceContext, resourceOwner)
-}
-
 func (r *Runtime) RebindProviderInstallation(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,

@@ -19,20 +19,12 @@ func TestSandboxToolSuiteCLIManagementWithoutProfileExposure(t *testing.T) {
 	if jobs["suiteId"] != "sandbox.jobs" || jobs["available"] != false || jobs["providerId"] != nil {
 		t.Fatalf("CLI local Sandbox exposed Jobs %+v", jobs)
 	}
-	before := runAgentJSON(t, db, "sandbox", "tools", id)["suite"].(map[string]any)
-	if before["status"] != "missing" {
-		t.Fatalf("GET suite unexpectedly mutating: %+v", before)
+	native := runAgentJSON(t, db, "sandbox", "tools", id)["suite"].(map[string]any)
+	if native["status"] != "ready" || len(native["tools"].([]any)) != 4 || native["providerId"] != nil {
+		t.Fatalf("CLI native tool projection invalid: %+v", native)
 	}
-	prepared := runAgentJSON(t, db, "sandbox", "tools", id, "--prepare")["suite"].(map[string]any)
-	if prepared["status"] != "ready" || len(prepared["tools"].([]any)) != 4 {
-		t.Fatalf("CLI suite not ready: %+v", prepared)
-	}
-	repeated := runAgentJSON(t, db, "sandbox", "tools", id, "--prepare")["suite"].(map[string]any)
-	if repeated["providerId"] != prepared["providerId"] {
-		t.Fatal("CLI tool suite identity changed")
-	}
-	removed := runAgentJSON(t, db, "sandbox", "tools", id, "--remove", "--confirm")
-	if removed["removed"] != true {
-		t.Fatalf("CLI could not retire unused suite: %+v", removed)
+	providers := runAgentJSON(t, db, "provider", "list")
+	if len(providers["providers"].([]any)) != 0 {
+		t.Fatal("Sandbox Tool projection created Provider")
 	}
 }

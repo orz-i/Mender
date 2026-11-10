@@ -112,7 +112,7 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	suite, err := r.EnsureSandboxWorkspaceTools(ctx, sandbox.ID(), owner)
+	suite, err := r.SandboxWorkspaceTools(ctx, sandbox.ID(), owner)
 	if err != nil || suite.Status != "ready" {
 		t.Fatalf("restricted Workspace tools unprepared: %v", err)
 	}

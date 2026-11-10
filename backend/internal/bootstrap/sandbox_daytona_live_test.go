@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,16 +9,12 @@ import (
 	"testing"
 	"time"
 
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sand "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	daytonadriver "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
-	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 const liveDaytonaTestKeyVariable = "MENDER_DAYTONA_LIVE_KEY"
@@ -144,68 +139,8 @@ func TestDaytonaLiveRuntimeProviderAndCleanup(t *testing.T) {
 		t.Fatalf("remote Run not ready: %v %v", run.State, err)
 	}
 	t.Log("Daytona real sandbox created with pinned TTL, network block and resource constraints")
-	rawConfig, err := json.Marshal(workspaceplugin.Config{SandboxID: item.ID().String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := runtime.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "daytona-live", DisplayName: "Daytona Live Workspace"}, workspaceplugin.ID, rawConfig, caller, true)
-	if err != nil {
-		t.Fatalf("remote Workspace Provider bind: %v", err)
-	}
-	syncResult, err := runtime.syncConfiguredProviderForOwner(ctx, provider.ID(), caller, true)
-	if err != nil || syncResult.Total != 4 {
-		t.Fatalf("Daytona Workspace tool sync: %v total=%d", err, syncResult.Total)
-	}
-	tools, err := runtime.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := map[string]catalogdomain.ToolID{}
-	for _, tool := range tools {
-		ids[tool.SourceKey()] = tool.ID()
-	}
-	invoke := func(sourceKey, arguments string) map[string]any {
-		t.Helper()
-		identifier := ids[sourceKey]
-		if identifier == "" {
-			t.Fatalf("missing %s tool", sourceKey)
-		}
-		response, execErr := runtime.CallConfiguredTool(ctx, identifier, []byte(arguments), caller)
-		if execErr != nil || response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
-			t.Fatalf("Daytona live %s unavailable: outcome=%s err=%v", sourceKey, response.Outcome.Kind(), execErr)
-		}
-		var output map[string]any
-		if err := json.Unmarshal(response.Outcome.Content().Bytes(), &output); err != nil {
-			t.Fatal(err)
-		}
-		return output
-	}
-	invoke("workspace.edit", `{"path":"stagee.txt","operation":"create","content":"hello Daytona\n"}`)
-	read := invoke("workspace.read", `{"path":"stagee.txt"}`)
-	if read["content"] != "hello Daytona" {
-		t.Fatalf("remote read content mismatch: %+v", read)
-	}
-	result := invoke("workspace.search", `{"mode":"content","query":"Daytona"}`)
-	matches, ok := result["matches"].([]any)
-	if !ok || len(matches) == 0 {
-		t.Fatalf("remote content search no matches: %+v", result)
-	}
-	edited := invoke("workspace.edit", `{"path":"stagee.txt","operation":"replace","edits":[{"oldText":"hello","newText":"verified"}]}`)
-	if edited["replacements"] != float64(1) {
-		t.Fatalf("Daytona remote replace: %+v", edited)
-	}
-	shell := invoke("workspace.shell", `{"command":"cat stagee.txt"}`)
-	if !strings.Contains(fmt.Sprint(shell["stdout"]), "verified Daytona") {
-		t.Fatalf("Daytona remote shell file mismatch: %+v", shell)
-	}
-	invoke("workspace.edit", `{"path":"stagee.txt","operation":"delete"}`)
-	t.Log("Daytona live read/search/edit/shell shared remote filesystem verified")
-	if _, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxDestroy, caller); err == nil {
-		t.Fatal("Daytona destroyed with bound Workspace Provider")
-	}
-	if err := runtime.providerConfigs.Delete(ctx, provider.ID()); err != nil {
-		t.Fatal(err)
-	}
+	// Native Workspace ToolIDs are canonical and independent of this Sandbox;
+	// this opt-in integration validates real Sandbox lifecycle only.
 	stopped, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxStop, caller)
 	if err != nil || stopped.State != sand.StateStopped {
 		t.Fatalf("Daytona Stop failed: state=%s err=%v", stopped.State, err)

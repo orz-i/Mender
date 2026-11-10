@@ -35,6 +35,9 @@ func (r *Runtime) activateMCPProvider(
 
 	var result catalogapplication.SyncProviderToolsResult
 	if synchronize {
+		if _, err := r.providerConfigs.GetProviderConfig(ctx, providerID); err != nil {
+			return result, fmt.Errorf("attach MCP test fixture: Provider config required: %w", err)
+		}
 		syncTools := r.Catalog.SyncProviderTools(connection)
 		var err error
 		result, err = syncTools.Execute(ctx, providerID)

@@ -28,16 +28,16 @@ func TestManagementProviderViewsPreserveTransportContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = runtime.Close() }()
-	caller, err := governancedomain.NewContext(governancedomain.OriginDesktop, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var connections atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		connections.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer upstream.Close()
+	caller, err := governancedomain.NewContext(governancedomain.OriginDesktop, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
 	rawConfig, err := json.Marshal(map[string]any{"transport": map[string]any{
 		"kind": "streamable-http", "endpoint": upstream.URL,
 	}})
@@ -55,16 +55,6 @@ func TestManagementProviderViewsPreserveTransportContracts(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	sandbox, err := runtime.Sandboxes.CreateLocalSandbox(ctx, bootstrap.CreateLocalSandboxRequest{
-		Name: "Workspace Owner", Root: t.TempDir(), Isolation: "host",
-	}, caller)
-	if err != nil {
-		t.Fatal(err)
-	}
-	suite, err := runtime.EnsureSandboxWorkspaceTools(ctx, sandbox.ID(), caller)
-	if err != nil || suite.Status != "ready" {
-		t.Fatalf("workspace tools = %+v, %v", suite, err)
 	}
 	service := desktopbinding.NewService(ctx, runtime)
 	readInventory := func() (map[string]map[string]any, map[string]map[string]any) {
@@ -109,17 +99,14 @@ func TestManagementProviderViewsPreserveTransportContracts(t *testing.T) {
 	}
 	httpItems, desktopItems := readInventory()
 	for _, items := range []map[string]map[string]any{httpItems, desktopItems} {
-		if len(items) != 3 {
-			t.Fatalf("inventory size = %d, want 3", len(items))
+		if len(items) != 2 {
+			t.Fatalf("inventory size = %d, want 2", len(items))
 		}
 		if item := items[standalone.ID().String()]; item["toolSourceKind"] != "provider" || item["toolSourceSelectable"] != true || item["toolSourceId"] != standalone.ID().String() {
 			t.Fatalf("standalone source = %#v", item)
 		}
 		if item := items[unconfigured.ID().String()]; item["toolSourceKind"] != "unclaimed" || item["toolSourceSelectable"] != false {
 			t.Fatalf("unconfigured source = %#v", item)
-		}
-		if item := items[suite.ProviderID]; item["toolSourceKind"] != "sandbox" || item["toolSourceId"] != sandbox.ID().String() || item["toolSourceName"] != "Workspace Owner" || item["toolSourceSelectable"] != true {
-			t.Fatalf("workspace source = %#v", item)
 		}
 	}
 	for id, httpItem := range httpItems {
@@ -139,13 +126,6 @@ func TestManagementProviderViewsPreserveTransportContracts(t *testing.T) {
 	}
 	if _, present := desktopItems[standalone.ID().String()]["headers"]; present {
 		t.Fatal("desktop empty headers must retain omitempty")
-	}
-	if _, err := runtime.Sandboxes.ChangeLocalLifecycle(ctx, sandbox.ID(), governancedomain.ActionSandboxStop, caller); err != nil {
-		t.Fatal(err)
-	}
-	httpItems, desktopItems = readInventory()
-	if httpItems[suite.ProviderID]["toolSourceSelectable"] != false || desktopItems[suite.ProviderID]["toolSourceSelectable"] != false {
-		t.Fatal("stopped Workspace source remained selectable")
 	}
 	if connections.Load() != 0 {
 		t.Fatalf("inert Provider inventory contacted the upstream %d times", connections.Load())

@@ -35,44 +35,45 @@ func TestSandboxToolSuiteHTTPInertReadAndExplicitOwnerMutation(t *testing.T) {
 	}, http.StatusCreated)
 	id := sandbox["sandboxId"].(string)
 	uri := root + "/sandboxes/" + id + "/tools"
-	before := requestJSON(t, server.Client(), http.MethodGet, uri, nil, http.StatusOK)
-	if before["status"] != "missing" || before["available"] != true || len(before["tools"].([]any)) != 0 {
-		t.Fatalf("unexpected prebinding Tool Suite: %+v", before)
+	ready := requestJSON(t, server.Client(), http.MethodGet, uri, nil, http.StatusOK)
+	if ready["status"] != "ready" || len(ready["tools"].([]any)) != 4 || ready["providerId"] != nil {
+		t.Fatalf("Native Sandbox projection: %+v", ready)
 	}
 	providers := requestJSON(t, server.Client(), http.MethodGet, root+"/providers", nil, http.StatusOK)
 	if len(providers["providers"].([]any)) != 0 {
-		t.Fatal("GET suite caused Provider side effects")
-	}
-	ready := requestJSON(t, server.Client(), http.MethodPost, uri, nil, http.StatusOK)
-	if ready["status"] != "ready" || len(ready["tools"].([]any)) != 4 || ready["providerId"] == "" {
-		t.Fatalf("Sandbox suite not prepared: %+v", ready)
-	}
-	repeated := requestJSON(t, server.Client(), http.MethodPost, uri, nil, http.StatusOK)
-	if repeated["providerId"] != ready["providerId"] {
-		t.Fatal("idempotent ensure changed Provider identity")
-	}
-	for i, x := range ready["tools"].([]any) {
-		y := repeated["tools"].([]any)[i].(map[string]any)
-		if x.(map[string]any)["toolId"] != y["toolId"] {
-			t.Fatal("idempotent ensure changed ToolID")
-		}
+		t.Fatal("Native Tools created Provider")
 	}
 	profiles := requestJSON(t, server.Client(), http.MethodGet, root+"/profiles", nil, http.StatusOK)
 	if len(profiles["profiles"].([]any)) != 0 {
-		t.Fatal("creating suite granted Profile access")
+		t.Fatal("Native Tools granted Profile")
 	}
-	requestJSON(t, server.Client(), http.MethodDelete, uri, nil, http.StatusNoContent)
-	missing := requestJSON(t, server.Client(), http.MethodGet, uri, nil, http.StatusOK)
-	if missing["status"] != "missing" || missing["providerId"] != nil {
-		t.Fatalf("suite not removed: %+v", missing)
+	for _, method := range []string{http.MethodPost, http.MethodDelete} {
+		request, _ := http.NewRequest(method, uri, nil)
+		response, err := server.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("removed %s route unexpectedly returned %d", method, response.StatusCode)
+		}
 	}
 	requestJSON(t, server.Client(), http.MethodGet, root+"/sandboxes/invalid/tools", nil, http.StatusBadRequest)
 	jobURI := root + "/sandboxes/" + id + "/job-tools"
 	jobState := requestJSON(t, server.Client(), http.MethodGet, jobURI, nil, http.StatusOK)
-	if jobState["suiteId"] != "sandbox.jobs" || jobState["available"] != false || jobState["providerId"] != nil || len(jobState["tools"].([]any)) != 0 {
-		t.Fatalf("incompatible local Sandbox unexpectedly exposed SSH Jobs: %+v", jobState)
+	if jobState["suiteId"] != "sandbox.jobs" || jobState["available"] != false || jobState["providerId"] != nil {
+		t.Fatalf("local Sandbox claimed SSH Jobs: %+v", jobState)
 	}
-	requestJSON(t, server.Client(), http.MethodPost, jobURI, nil, http.StatusConflict)
-	requestJSON(t, server.Client(), http.MethodDelete, jobURI, nil, http.StatusNoContent)
+	for _, method := range []string{http.MethodPost, http.MethodDelete} {
+		request, _ := http.NewRequest(method, jobURI, nil)
+		response, err := server.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("removed %s Jobs route unexpectedly returned %d", method, response.StatusCode)
+		}
+	}
 	requestJSON(t, server.Client(), http.MethodGet, root+"/sandboxes/invalid/job-tools", nil, http.StatusBadRequest)
 }

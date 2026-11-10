@@ -116,7 +116,7 @@ func (r *Runtime) CallConfiguredTool(
 	// executor and no Provider to activate. They always enter the same
 	// Invocation gate; this is not a shortcut around ToolBinding or Policy.
 	if tool.SourceRef().Kind() != catalogdomain.SourceProvider {
-		return r.invokeToolWithSSHTimeout(ctx, request)
+		return r.InvokeTool.Execute(ctx, request)
 	}
 	if tool.ProviderID() == "" {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: Tool %s has no verified Provider owner", toolID)
@@ -124,7 +124,7 @@ func (r *Runtime) CallConfiguredTool(
 	if err := r.activateConfiguredProvider(ctx, tool.ProviderID(), executionContext); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}
-	return r.invokeToolWithSSHTimeout(ctx, request)
+	return r.InvokeTool.Execute(ctx, request)
 }
 
 func wrapOptionalError(message string, err error) error {

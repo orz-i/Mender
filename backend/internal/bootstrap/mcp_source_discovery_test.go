@@ -28,9 +28,10 @@ func TestMCPDiscoveryUsesRealAgentOwnerNotFacadeDisplay(t *testing.T) {
 	caller := agentOwnerContext(t, r)
 
 	type selectedAgent struct {
-		providerID catalogdomain.ProviderID
-		name       string
-		toolID     catalogdomain.ToolID
+		ref     catalogdomain.SourceRef
+		agentID agentdomain.ID
+		name    string
+		toolID  catalogdomain.ToolID
 	}
 	agents := make([]selectedAgent, 0, 2)
 	for _, agentName := range []string{"QA OpenCode", "QA Antigravity"} {
@@ -44,24 +45,23 @@ func TestMCPDiscoveryUsesRealAgentOwnerNotFacadeDisplay(t *testing.T) {
 		if err != nil || suite.Status != "ready" {
 			t.Fatalf("agent tools: %+v %v", suite, err)
 		}
-		providerID, err := catalogdomain.ParseProviderID(suite.ProviderID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		tools, err := r.Catalog.store.ListProviderTools(ctx, providerID)
+		ref, err := catalogdomain.AgentSource(string(agent.ID()))
 		if err != nil {
 			t.Fatal(err)
 		}
 		var delegate catalogdomain.ToolID
-		for _, tool := range tools {
-			if tool.Name() == "delegate" {
-				delegate = tool.ID()
+		for _, tool := range suite.Tools {
+			if tool.SourceKey == "agent.delegate" {
+				delegate, err = catalogdomain.ParseToolID(tool.ToolID)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
-		if delegate.String() == "" {
-			t.Fatalf("delegate not found for %s", agentName)
+		if delegate == "" {
+			t.Fatalf("missing Agent-owned delegate: %s", agentName)
 		}
-		agents = append(agents, selectedAgent{providerID, agentName, delegate})
+		agents = append(agents, selectedAgent{ref: ref, agentID: agent.ID(), name: agentName, toolID: delegate})
 	}
 
 	profile, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{
@@ -78,8 +78,15 @@ func TestMCPDiscoveryUsesRealAgentOwnerNotFacadeDisplay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if err := r.Agents.Grant(ctx, agent.agentID, profile.ID().String(), caller); err != nil {
+			t.Fatal(err)
+		}
 	}
 
+	profile, err = r.Profiles.Get.Execute(ctx, profile.Slug())
+	if err != nil {
+		t.Fatal(err)
+	}
 	adapter, err := r.NewMCPServer(ctx, profile)
 	if err != nil {
 		t.Fatal(err)
@@ -123,12 +130,12 @@ func TestMCPDiscoveryUsesRealAgentOwnerNotFacadeDisplay(t *testing.T) {
 			t.Fatalf("source name %s = %#v", agent.name, exact)
 		}
 		source := sources[0].(map[string]any)
-		if source["sourceId"] != agent.providerID.String() ||
+		if source["sourceId"] != agent.ref.String() ||
 			source["sourceName"] != agent.name || source["sourceKind"] != "agent" ||
 			source["toolCount"] != float64(1) && source["toolCount"] != 1 {
 			t.Fatalf("source mismatch: %s => %#v", agent.name, source)
 		}
-		toolsResult := search(map[string]any{"sourceId": agent.providerID.String(), "view": "tools"})
+		toolsResult := search(map[string]any{"sourceId": agent.ref.String(), "view": "tools"})
 		tools, ok := toolsResult["tools"].([]any)
 		if !ok || len(tools) != 1 || tools[0].(map[string]any)["toolId"] != agent.toolID.String() {
 			t.Fatalf("source %s tools = %#v", agent.name, toolsResult)
@@ -136,7 +143,13 @@ func TestMCPDiscoveryUsesRealAgentOwnerNotFacadeDisplay(t *testing.T) {
 	}
 	// Standard MCP describe remains identity-locked: the Profile sees only
 	// the two delegated tool IDs, never sibling status/result/cancel Tools.
-	tools, err := r.Catalog.store.ListProviderTools(ctx, agents[0].providerID)
+	store, ok := r.Catalog.store.(interface {
+		ListSourceTools(context.Context, catalogdomain.SourceRef) ([]catalogdomain.Tool, error)
+	})
+	if !ok {
+		t.Fatal("typed Catalog lookup unavailable")
+	}
+	tools, err := store.ListSourceTools(ctx, agents[0].ref)
 	if err != nil {
 		t.Fatal(err)
 	}

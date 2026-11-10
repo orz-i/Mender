@@ -12,9 +12,7 @@ import (
 	"testing"
 	"time"
 
-	catalogapp "github.com/orz-i/Mender/backend/internal/catalog/application"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	policyapp "github.com/orz-i/Mender/backend/internal/policy/application"
@@ -24,7 +22,6 @@ import (
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
 	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
-	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 func exampleSandboxPluginPackage(t *testing.T, overlays ...string) string {
@@ -406,96 +403,6 @@ func TestExternalSandboxPackageTamperFailsClosed(t *testing.T) {
 // The real Workspace Provider (not a direct backend session) invokes the
 // external Sandbox through Catalog -> Invoke -> Provider -> Sandbox Router,
 // with the outer Tool audit and Sandbox durable lease enforced independently.
-func TestExternalSandboxWorkspaceProviderCanonicalToolInvocation(t *testing.T) {
-	ctx := context.Background()
-	pkg := exampleSandboxPluginPackage(t)
-	folder := t.TempDir()
-	managed := filepath.Join(folder, "managed")
-	t.Cleanup(func() { makeManagedPluginTempTreeWritable(managed) })
-	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(folder, "mender.db"), ProviderPluginRoot: managed})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = r.Close() }()
-	installation, err := r.InstallSandboxPlugin(ctx, pkg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sandbox, err := r.Sandboxes.CreateExternalSandbox(ctx, fixtureSandboxRequest(installation.ID(), `{}`), ownerContext(t, r))
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := json.Marshal(workspaceplugin.Config{SandboxID: sandbox.ID().String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := registerConfiguredProviderTest(t, r, ctx, catalogapp.RegisterProviderRequest{
-		Namespace: "external-sandbox-workspace", DisplayName: "External Sandbox Workspace",
-	}, workspaceplugin.ID, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := syncConfiguredProviderTest(t, r, ctx, provider.ID()); err != nil {
-		t.Fatal(err)
-	}
-	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var readToolFound bool
-	for _, tool := range tools {
-		if tool.SourceKey() != "workspace.read" {
-			continue
-		}
-		readToolFound = true
-		response, err := r.CallConfiguredTool(ctx, tool.ID(), []byte(`{"path":"README.txt"}`), ownerContext(t, r))
-		if err != nil || response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
-			t.Fatalf("canonical Workspace Tool did not execute inside plugin Sandbox: outcome=%+v err=%v", response.Outcome, err)
-		}
-		var result struct {
-			Path, Content      string
-			StartLine, EndLine int
-			Truncated          bool
-		}
-		if err := json.Unmarshal(response.Outcome.Content().Bytes(), &result); err != nil {
-			t.Fatal(err)
-		}
-		if result.Path != "README.txt" || !strings.Contains(result.Content, "Example Sandbox") || result.StartLine != 1 ||
-			result.EndLine != 1 || result.Truncated {
-			t.Fatalf("unexpected canonical read result %+v", result)
-		}
-		audit, err := r.audit.Get(ctx, response.InvocationID)
-		if err != nil || audit.ProviderID() == nil || *audit.ProviderID() != provider.ID() ||
-			audit.OutcomeKind() != invocationdomain.OutcomeKindComplete {
-			t.Fatalf("canonical Invocation audit not persisted: %+v %v", audit, err)
-		}
-		leases, err := r.Sandboxes.store.ActiveLeaseCount(ctx, sandbox.ID())
-		if err != nil || leases != 0 {
-			t.Fatalf("Tool Invocation leaked Sandbox lease: %d %v", leases, err)
-		}
-		// Denied acquisition must never reach the native session.
-		rule, err := r.Policy.CreateRule.Execute(ctx, policyapp.RuleInput{
-			DisplayName: "deny external Sandbox acquisition",
-			Enabled:     true, Decision: policydomain.DecisionDeny,
-			Match: policydomain.MatchSpec{Actions: []governancedomain.Action{governancedomain.ActionSandboxAcquire}},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		second, secondErr := r.CallConfiguredTool(ctx, tool.ID(), []byte(`{"path":"README.txt"}`), ownerContext(t, r))
-		if secondErr == nil && second.Outcome.Kind() == invocationdomain.OutcomeKindComplete {
-			t.Fatal("policy-denied external Sandbox acquire executed Workspace Tool")
-		}
-		if err := r.Policy.DeleteRule.Execute(ctx, rule.ID()); err != nil {
-			t.Fatal(err)
-		}
-		break
-	}
-	if !readToolFound {
-		t.Fatal("canonical workspace.read Tool not discovered")
-	}
-}
-
 func TestExternalSandboxCannotCreateWithDisabledPackage(t *testing.T) {
 	ctx := context.Background()
 	source := exampleSandboxPluginPackage(t)

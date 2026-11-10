@@ -5,14 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"net/url"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocation "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	migration "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	"github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/typedlease"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
@@ -47,8 +48,8 @@ type atomicFixture struct {
 func atomicWorkspaceFixture(t *testing.T) *atomicFixture {
 	t.Helper()
 	ctx := context.Background()
-	legacyPath := filepath.Join(t.TempDir(), "legacy.sqlite")
-	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: legacyPath})
+	dbPath := filepath.Join(t.TempDir(), "v3.sqlite")
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,26 +67,15 @@ func atomicWorkspaceFixture(t *testing.T) *atomicFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.EnsureSandboxWorkspaceTools(ctx, item.ID(), owner); err != nil {
-		t.Fatal(err)
-	}
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := migration.AssessPath(ctx, legacyPath)
-	if err != nil || plan.Status != "ready" {
-		t.Fatalf("Stage E assessment not ready: %v %+v", err, plan.Conflicts)
-	}
-	candidate, err := migration.StageCopy(ctx, legacyPath, filepath.Join(t.TempDir(), "candidate.sqlite"), plan.ManifestDigest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	uri := url.URL{Scheme: "file", Path: filepath.ToSlash(candidate.CandidatePath)}
-	q := uri.Query()
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(dbPath)}
+	q := u.Query()
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "busy_timeout(5000)")
-	uri.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", uri.String())
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,10 +84,14 @@ func atomicWorkspaceFixture(t *testing.T) *atomicFixture {
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
 		t.Fatal(err)
 	}
-	var wsRef string
-	var generation uint64
-	if err := db.QueryRow(`SELECT workspace_id,verified_revision FROM workspace_placements
-   WHERE sandbox_id=?`, item.ID().String()).Scan(&wsRef, &generation); err != nil {
+	wsRef := "wrk_11111111111111111111111111111111"
+	generation := uint64(1)
+	if _, err := db.Exec(`INSERT INTO workspaces(workspace_id,owner_kind,owner_ref,display_name,verified_root,created_at)
+		VALUES(?,?,?,?,?,?)`, wsRef, string(owner.Principal().Kind()), owner.Principal().Reference(), "Scope integration", root, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO workspace_placements(workspace_id,sandbox_id,backend_root,verified_revision)
+		VALUES(?,?,?,?)`, wsRef, item.ID().String(), root, generation); err != nil {
 		t.Fatal(err)
 	}
 	defs, err := curated.PlannedNativeTools()
@@ -291,23 +285,22 @@ func TestAtomicLeaseRejectsUnapprovedInvocationAndDifferentTool(t *testing.T) {
 		t.Fatal("failed admission left a lease")
 	}
 }
-func TestTypedLeaseRejectsLegacySchema(t *testing.T) {
+func TestTypedLeaseRejectsIncompatibleSchema(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "legacy.sqlite")
-	r, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Close(); err != nil {
-		t.Fatal(err)
-	}
+	path := filepath.Join(t.TempDir(), "incompatible.sqlite")
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`CREATE TABLE tool_hardcut_schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO tool_hardcut_schema_migrations(version) VALUES(0)`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := typedlease.New(ctx, db, &receiptVerifier{}); err == nil {
-		t.Fatal("typed lease accepted Provider-only legacy Schema")
+		t.Fatal("typed lease accepted incompatible schema")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -13,19 +13,19 @@ import (
 // application. It owns no state transitions or compensation decisions.
 func (r *Runtime) providerManagement() providerapplication.Service {
 	deps := providerapplication.Dependencies{
-		Catalog:         providerCatalogAdapter{catalog: r.Catalog},
-		Configurations:  r.providerConfigs,
-		Builtins:        r.providerPlugins,
-		Resolver:        r.providerResolver,
-		Installations:   r.externalResolver,
-		Instances:       r.providerInstances,
-		Credentials:     r.Credentials.Resolver,
-		Activation:      r.providerActivation,
-		Profiles:        r.Profiles.List,
-		Policy:          r.Policy.Get,
-		Retirement:      providerretirement.NewRetirement(r.providerDatabasePath),
-		Clock:           r.Catalog.clock,
-		IsManagedFacade: isManagedProviderFacade,
+		Catalog:             providerCatalogAdapter{catalog: r.Catalog},
+		Configurations:      r.providerConfigs,
+		Builtins:            r.providerPlugins,
+		Resolver:            r.providerResolver,
+		Installations:       r.externalResolver,
+		Instances:           r.providerInstances,
+		Credentials:         r.Credentials.Resolver,
+		Activation:          r.providerActivation,
+		Profiles:            r.Profiles.List,
+		Policy:              r.Policy.Get,
+		Retirement:          providerretirement.NewRetirement(r.providerDatabasePath),
+		Clock:               r.Catalog.clock,
+		IsRetiredProviderID: isRetiredInternalProviderID,
 	}
 	// Agent and Sandbox are directly owned SourceRefs in v3, not Provider
 	// children; their retired facade tables are absent from the database.

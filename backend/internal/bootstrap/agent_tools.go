@@ -23,11 +23,9 @@ type AgentTool struct {
 
 // AgentTools is a read-only projection of Agent as Tool operations.
 type AgentTools struct {
-	SuiteID      string      `json:"suiteId"`
-	Status       string      `json:"status"`
-	ProviderID   string      `json:"providerId,omitempty"`
-	ProviderName string      `json:"providerName,omitempty"`
-	Tools        []AgentTool `json:"tools"`
+	SuiteID string      `json:"suiteId"`
+	Status  string      `json:"status"`
+	Tools   []AgentTool `json:"tools"`
 }
 
 type ownedAgentCatalog interface {
@@ -167,23 +165,27 @@ func (r *Runtime) CreateAgentWithTools(ctx context.Context, request agentapplica
 	return agent, nil
 }
 
-// DeleteAgentWithTools fails closed while canonical ToolIDs exist: their
-// Profile/Policy/Audit references require explicit atomic source retirement.
-// Never recreate a facade, silently delete a ToolBinding, or lose task history.
+// DeleteAgentWithTools retires an unreferenced Agent and its canonical ToolIDs
+// under one SQLite transaction; no Provider façade or blanket grant cleanup.
 func (r *Runtime) DeleteAgentWithTools(ctx context.Context, id agentdomain.ID, caller gov.Context) error {
-	state, err := r.AgentTools(ctx, id, caller)
+	if _, err := r.Agents.Get(ctx, id, caller); err != nil {
+		return err
+	}
+	source, err := catalogdomain.AgentSource(string(id))
 	if err != nil {
 		return err
 	}
-	tasks, err := r.Agents.Tasks(ctx, id, caller)
-	if err != nil {
-		return err
+	store, ok := r.Catalog.store.(interface {
+		RetireOwnedAgent(context.Context, catalogdomain.SourceRef) error
+	})
+	if !ok {
+		return agentdomain.ErrUnavailable
 	}
-	if len(tasks) != 0 {
-		return fmt.Errorf("%w: Agent has task history", agentdomain.ErrConflict)
+	if err = store.RetireOwnedAgent(ctx, source); err != nil {
+		return fmt.Errorf("delete Agent with canonical Tools: %w", err)
 	}
-	if len(state.Tools) != 0 {
-		return fmt.Errorf("%w: Agent has canonical Tools requiring reviewed retirement", agentdomain.ErrConflict)
+	if err = r.executors.UnregisterSource(source); err != nil {
+		return fmt.Errorf("delete Agent: unregister retired executor: %w", err)
 	}
-	return r.Agents.Delete(ctx, id, caller)
+	return nil
 }

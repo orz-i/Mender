@@ -113,7 +113,7 @@ func TestConfiguredPlacementRejectsWrongWorkspaceOrUnpreparedSandbox(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.runtime.EnsureSandboxWorkspaceTools(ctx, wrongSandbox.ID(), f.owner); err != nil {
+	if _, err := f.runtime.SandboxWorkspaceTools(ctx, wrongSandbox.ID(), f.owner); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.runtime.ConfigureAgentToolPlacement(ctx, f.agent.ID(), "", wrongSandbox.ID().String(),

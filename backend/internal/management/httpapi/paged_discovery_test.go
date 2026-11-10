@@ -44,11 +44,11 @@ func TestHTTPBrowseAndSearchCursorCoversLargeServiceCatalog(t *testing.T) {
 		name := fmt.Sprintf("search_%03d", i)
 		source := fmt.Sprintf("anysearch.%03d", i)
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		if _, err = tx.ExecContext(ctx, `INSERT INTO tools(id,provider_id,source_key,name,title,description,input_schema,output_schema,tags_json,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?,NULL,'[]',?,?)`, id, provider.ID().String(), source, name, name, "search the web", []byte(`{"type":"object"}`), now, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO tools(id,source_kind,source_id,source_key,name,title,description,input_schema,output_schema,tags_json,created_at,updated_at)
+    VALUES(?,'provider',?,?,?,?,?,?,NULL,'[]',?,?)`, id, provider.ID().String(), source, name, name, "search the web", []byte(`{"type":"object"}`), now, now); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO tools_fts(tool_id,provider_id,name,title,description,tags) VALUES(?,?,?,?,?,?)`,
+		if _, err = tx.ExecContext(ctx, `INSERT INTO tools_fts(tool_id,source_kind,source_id,name,title,description,tags) VALUES(?,'provider',?,?,?,?,?)`,
 			id, provider.ID().String(), name, name, "search the web", "search"); err != nil {
 			t.Fatal(err)
 		}

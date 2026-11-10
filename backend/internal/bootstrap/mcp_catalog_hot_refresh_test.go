@@ -8,7 +8,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	catalogsqlite "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite"
 )
 
 func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing.T) {
@@ -29,12 +28,12 @@ func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing
 			}
 			// A separate SQLite writer simulates an external CLI/process syncing
 			// the Tool source while the already-connected HTTP MCP server runs.
-			writer, err := catalogsqlite.Open(ctx, f.dbPath)
+			writer, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: f.dbPath})
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = writer.Close() })
-			tools, err := writer.ListProviderTools(ctx, pid)
+			tools, err := writer.store.ListProviderTools(ctx, pid)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -62,7 +61,7 @@ func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing
 				}
 				changed = append(changed, next)
 			}
-			if err := writer.ReplaceProviderTools(ctx, pid, changed); err != nil {
+			if err := writer.store.ReplaceProviderTools(ctx, pid, changed); err != nil {
 				t.Fatal(err)
 			}
 			profileAfter, err := f.runtime.Profiles.Get.Execute(ctx, f.profile.Slug())

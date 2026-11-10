@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
@@ -43,23 +42,4 @@ func (r *Runtime) SandboxJobTools(ctx context.Context, id sandbox.ID, caller gov
 		return SandboxToolSuite{}, err
 	}
 	return r.listNativeSandboxTools(ctx, id, caller, suite.SandboxJobs, "jobs", available, issue)
-}
-
-// Former "prepare jobs tools" now only exposes the canonical native Tools
-// without creating a resource-owned Provider or altering grants.
-func (r *Runtime) EnsureSandboxJobTools(ctx context.Context, id sandbox.ID, caller gov.Context) (SandboxToolSuite, error) {
-	return r.SandboxJobTools(ctx, id, caller)
-}
-
-// Job ToolIDs are shared across Sandboxes and cannot be removed per resource.
-// Existing Job evidence is retained by the Sandbox backend, never deleted.
-func (r *Runtime) RemoveSandboxJobTools(ctx context.Context, id sandbox.ID, caller gov.Context) error {
-	state, err := r.SandboxJobTools(ctx, id, caller)
-	if err != nil {
-		return err
-	}
-	if len(state.Tools) == 0 {
-		return nil // there is nothing installed to retire
-	}
-	return fmt.Errorf("%w: native SSH Job tools cannot be retired per Sandbox", sandbox.ErrConflict)
 }

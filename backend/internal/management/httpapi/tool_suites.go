@@ -58,28 +58,3 @@ func (h *Handler) getSandboxTools(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, state)
 }
-func (h *Handler) ensureSandboxTools(w http.ResponseWriter, r *http.Request) {
-	id, caller, err := h.sandboxToolsRequest(r)
-	if err != nil {
-		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
-		return
-	}
-	state, err := h.runtime.EnsureSandboxWorkspaceTools(r.Context(), id, caller)
-	if err != nil {
-		h.workspaceSuiteError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state)
-}
-func (h *Handler) removeSandboxTools(w http.ResponseWriter, r *http.Request) {
-	id, caller, err := h.sandboxToolsRequest(r)
-	if err != nil {
-		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
-		return
-	}
-	if err := h.runtime.RemoveSandboxWorkspaceTools(r.Context(), id, caller); err != nil {
-		h.workspaceSuiteError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}

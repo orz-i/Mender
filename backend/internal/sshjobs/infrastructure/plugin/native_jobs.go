@@ -1,10 +1,14 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"regexp"
 
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -264,3 +268,50 @@ func sameNativeJobFacts(a, b invocation.GovernanceFacts) bool {
 
 var _ invocationapp.ToolExecutor = (*NativeJobs)(nil)
 var _ invocationapp.GovernanceFactExtractor = (*NativeJobs)(nil)
+
+const (
+	SourceSubmit = "jobs.submit"
+	SourceStatus = "jobs.status"
+	SourceLogs   = "jobs.logs"
+	SourceResult = "jobs.result"
+	SourceCancel = "jobs.cancel"
+)
+
+var taskIDPattern = regexp.MustCompile(`^sjob_[0-9a-f]{32}$`)
+
+// Port is implemented by the governed SSH Sandbox application.
+type Port interface {
+	VerifySSHJobResource(context.Context, sandbox.ID) error
+	SubmitSSHJob(context.Context, sandbox.ID, governance.Context, sshremote.JobRequest) (sshremote.JobSnapshot, error)
+	SSHJobStatus(context.Context, sandbox.ID, governance.Context, string) (sshremote.JobSnapshot, error)
+	SSHJobResult(context.Context, sandbox.ID, governance.Context, string) (sshremote.JobSnapshot, error)
+	SSHJobLogs(context.Context, sandbox.ID, governance.Context, string, string, int64, int) (sshremote.JobLogs, error)
+	SSHJobCancel(context.Context, sandbox.ID, governance.Context, string) (sshremote.JobSnapshot, error)
+}
+
+func strictDecode(raw []byte, target any) error {
+	if len(raw) > 1<<20 {
+		return sshremote.ErrJobInvalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return sshremote.ErrJobInvalid
+	}
+	var rest any
+	if err := decoder.Decode(&rest); err != io.EOF {
+		return sshremote.ErrJobInvalid
+	}
+	return nil
+}
+func complete(value any) (invocation.Outcome, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return invocation.Outcome{}, err
+	}
+	payload, err := invocation.NewJSONValue(raw)
+	if err != nil {
+		return invocation.Outcome{}, err
+	}
+	return invocation.Complete(payload)
+}

@@ -35,11 +35,9 @@ type AgentTool struct {
 	Title     string `json:"title"`
 }
 type AgentTools struct {
-	SuiteID      string      `json:"suiteId"`
-	Status       string      `json:"status"`
-	ProviderID   string      `json:"providerId,omitempty"`
-	ProviderName string      `json:"providerName,omitempty"`
-	Tools        []AgentTool `json:"tools"`
+	SuiteID string      `json:"suiteId"`
+	Status  string      `json:"status"`
+	Tools   []AgentTool `json:"tools"`
 }
 type AgentTaskObservation struct {
 	Phase                 string `json:"phase"`
@@ -187,8 +185,8 @@ func (s *Service) CreateAgent(input CreateAgentInput) (Agent, error) {
 }
 func projectAgentTools(value bootstrap.AgentTools) AgentTools {
 	out := AgentTools{
-		SuiteID: value.SuiteID, Status: value.Status, ProviderID: value.ProviderID,
-		ProviderName: value.ProviderName, Tools: make([]AgentTool, 0, len(value.Tools)),
+		SuiteID: value.SuiteID, Status: value.Status,
+		Tools: make([]AgentTool, 0, len(value.Tools)),
 	}
 	for _, tool := range value.Tools {
 		out.Tools = append(out.Tools, AgentTool{

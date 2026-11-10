@@ -16,48 +16,18 @@ import (
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 )
 
-func TestCLIWorkspaceToolsUseSandboxOwnedCreationOnly(t *testing.T) {
+func TestCLINativeWorkspaceCapabilitiesDoNotCreateProviders(t *testing.T) {
 	t.Parallel()
-
 	dbPath := filepath.Join(t.TempDir(), "mender.db")
-	workspaceRoot := t.TempDir()
-	created := executeJSONCommand(t, dbPath, "sandbox", "add", "local", "--name", "CLI workspace", "--root", workspaceRoot, "--isolation", "host")
-	sandboxItem, ok := created["sandbox"].(map[string]any)
-	if !ok {
-		t.Fatalf("sandbox create = %#v", created)
+	created := executeJSONCommand(t, dbPath, "sandbox", "add", "local", "--name", "CLI workspace", "--root", t.TempDir(), "--isolation", "host")
+	sandboxID := created["sandbox"].(map[string]any)["sandboxId"].(string)
+	native := executeJSONCommand(t, dbPath, "sandbox", "tools", sandboxID)["suite"].(map[string]any)
+	if native["status"] != "ready" || len(native["tools"].([]any)) != 4 || native["providerId"] != nil {
+		t.Fatalf("native tools: %+v", native)
 	}
-	sandboxID, ok := sandboxItem["sandboxId"].(string)
-	if !ok || sandboxID == "" {
-		t.Fatalf("missing SandboxID: %#v", created)
-	}
-	registered := executeJSONCommand(t, dbPath, "sandbox", "tools", sandboxID, "--prepare")
-	suite, ok := registered["suite"].(map[string]any)
-	if !ok || suite["status"] != "ready" {
-		t.Fatalf("sandbox owned Workspace tools = %#v", registered)
-	}
-	tools, ok := suite["tools"].([]any)
-	if !ok || len(tools) != 4 {
-		t.Fatalf("sandbox owned Workspace Tool count = %#v", suite["tools"])
-	}
-	root := NewRootCommand(Options{})
-	add, _, err := root.Find([]string{"provider", "add"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, command := range add.Commands() {
-		if command.Name() == "workspace" {
-			t.Fatal("retired generic Workspace Provider CLI command remains available")
-		}
-	}
-
-	listed := executeJSONCommand(t, dbPath, "provider", "list")
-	providers, ok := listed["providers"].([]any)
-	if !ok || len(providers) != 1 {
-		t.Fatalf("provider list = %#v", listed)
-	}
-	item, _ := providers[0].(map[string]any)
-	if item["pluginId"] != "io.mender.provider.workspace" || item["providerId"] != suite["providerId"] {
-		t.Fatalf("resource-owned Provider identity = %#v, suite=%#v", item, suite)
+	inventory := executeJSONCommand(t, dbPath, "provider", "list")
+	if len(inventory["providers"].([]any)) != 0 {
+		t.Fatalf("Sandbox created Provider: %+v", inventory)
 	}
 }
 

@@ -62,12 +62,6 @@ type PolicyQuery interface {
 	Execute(context.Context) (policydomain.PolicySet, error)
 }
 
-// OwnershipQuery is implemented by each resource context's narrow application
-// query. Provider management never reaches into Agent or Sandbox repositories.
-type OwnershipQuery interface {
-	Execute(context.Context, catalogdomain.ProviderID) (bool, error)
-}
-
 // Retirement commits the existing cross-context reference contract at one
 // SQLite writer gate; preflight queries do not replace that commit-point guard.
 type Retirement interface {
@@ -75,21 +69,19 @@ type Retirement interface {
 }
 
 type Dependencies struct {
-	Catalog          Catalog
-	Configurations   Configurations
-	Builtins         BuiltinPlugins
-	Resolver         providerplugin.Resolver
-	Installations    InstallationResolver
-	Instances        Instances
-	Credentials      invocationapplication.CredentialResolver
-	Activation       Activation
-	Profiles         ProfileQuery
-	Policy           PolicyQuery
-	AgentOwnership   OwnershipQuery
-	SandboxOwnership OwnershipQuery
-	Retirement       Retirement
-	Clock            catalogapplication.Clock
-	IsManagedFacade  func(providerplugin.ID) bool
+	Catalog             Catalog
+	Configurations      Configurations
+	Builtins            BuiltinPlugins
+	Resolver            providerplugin.Resolver
+	Installations       InstallationResolver
+	Instances           Instances
+	Credentials         invocationapplication.CredentialResolver
+	Activation          Activation
+	Profiles            ProfileQuery
+	Policy              PolicyQuery
+	Retirement          Retirement
+	Clock               catalogapplication.Clock
+	IsRetiredProviderID func(providerplugin.ID) bool
 }
 
 // Service is stateless; the composition root retains connection, instance and

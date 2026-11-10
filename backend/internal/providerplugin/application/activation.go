@@ -30,30 +30,18 @@ func (s Service) admitProviderActivation(
 }
 
 func (s Service) SyncConfiguredProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
+	ctx context.Context, providerID catalogdomain.ProviderID,
 	governanceContext governancedomain.Context,
 ) (catalogapplication.SyncProviderToolsResult, error) {
-	return s.SyncConfiguredProviderForOwner(ctx, providerID, governanceContext, false)
-}
-
-func (s Service) SyncConfiguredProviderForOwner(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-	governanceContext governancedomain.Context,
-	resourceOwner bool,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	if !resourceOwner {
-		config, err := s.deps.Configurations.GetProviderConfig(ctx, providerID)
-		if err != nil {
-			return catalogapplication.SyncProviderToolsResult{}, err
-		}
-		if s.deps.IsManagedFacade(config.PluginID) {
-			return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf("%w: Provider belongs to a resource-owned Tool Suite", ErrProviderInUse)
-		}
+	config, err := s.deps.Configurations.GetProviderConfig(ctx, providerID)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, err
+	}
+	if s.deps.IsRetiredProviderID != nil && s.deps.IsRetiredProviderID(config.PluginID) {
+		return catalogapplication.SyncProviderToolsResult{}, ErrProviderInUse
 	}
 	var result catalogapplication.SyncProviderToolsResult
-	err := s.admitProviderActivation(
+	err = s.admitProviderActivation(
 		ctx,
 		providerID,
 		governanceContext,

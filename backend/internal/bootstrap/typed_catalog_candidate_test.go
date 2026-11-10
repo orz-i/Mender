@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -11,16 +12,16 @@ import (
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	sourcecatalog "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sourcecatalog"
 	credentialapp "github.com/orz-i/Mender/backend/internal/credential/application"
-	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
+	_ "modernc.org/sqlite"
 )
 
-func migratedTypedCatalogCandidate(t *testing.T) (legacy string, candidate string, providerID catalog.ProviderID, toolID catalog.ToolID) {
+func v3CatalogFixture(t *testing.T) (dbPath string, providerID catalog.ProviderID, toolID catalog.ToolID) {
 	t.Helper()
 	ctx := context.Background()
-	legacy = filepath.Join(t.TempDir(), "legacy.sqlite")
-	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: legacy})
+	dbPath = filepath.Join(t.TempDir(), "v3.sqlite")
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,34 +40,23 @@ func migratedTypedCatalogCandidate(t *testing.T) (legacy string, candidate strin
 	}
 	syncResult, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil || syncResult.Total != 1 {
-		t.Fatalf("legacy configured Provider Tool sync: %+v %v", syncResult, err)
+		t.Fatalf("configured Provider Tool sync: %+v %v", syncResult, err)
 	}
 	tools, err := runtime.Catalog.store.ListProviderTools(ctx, provider.ID())
 	if err != nil || len(tools) != 1 {
-		t.Fatalf("legacy external tool not registered: %+v %v", tools, err)
+		t.Fatalf("external tool not registered: %+v %v", tools, err)
 	}
 	originalID := tools[0].ID()
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	report, err := hardcut.AssessPath(ctx, legacy)
-	if err != nil || report.Status != "ready" {
-		t.Fatalf("disposable source migration unexpectedly blocked: %+v %v", report.Conflicts, err)
-	}
-	artifact, err := hardcut.StageCopy(ctx, legacy, filepath.Join(t.TempDir(), "typed.sqlite"), report.ManifestDigest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := hardcut.VerifyStagedCopy(ctx, artifact); err != nil {
-		t.Fatal(err)
-	}
-	return legacy, artifact.CandidatePath, provider.ID(), originalID
+	return dbPath, provider.ID(), originalID
 }
 
 func TestTypedCatalogCompositionRetainsProviderAndCanonicalNativeToolIDs(t *testing.T) {
 	ctx := context.Background()
-	legacy, candidate, providerID, toolID := migratedTypedCatalogCandidate(t)
-	catalogRoot, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: candidate})
+	dbPath, providerID, toolID := v3CatalogFixture(t)
+	catalogRoot, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,23 +105,29 @@ func TestTypedCatalogCompositionRetainsProviderAndCanonicalNativeToolIDs(t *test
 	if err := catalogRoot.ProviderToolSnapshots.Restore(ctx, providerID, nil); !errors.Is(err, sourcecatalog.ErrRetirementRequiresReview) {
 		t.Fatalf("unreviewed Provider Tool retirement accepted: %v", err)
 	}
-	// The independent legacy source DB is unchanged by the disposable v3 Catalog.
-	report, err := hardcut.AssessPath(ctx, legacy)
-	if err != nil || report.Status != "ready" {
-		t.Fatalf("typed Candidate modified legacy DB: %v %+v", err, report.Conflicts)
-	}
 }
 
-func TestTypedCatalogRefusesUnconfiguredProviderSyncAndLegacySchema(t *testing.T) {
+func TestTypedCatalogRefusesUnconfiguredProviderSyncAndIncompatibleSchema(t *testing.T) {
 	ctx := context.Background()
-	legacy, candidate, _, _ := migratedTypedCatalogCandidate(t)
-	if _, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: legacy}); err == nil {
-		t.Fatal("typed Catalog opened old Provider-v2 database")
+	dbPath, _, _ := v3CatalogFixture(t)
+	// Incompatible schema: wrong hardcut marker version.
+	bad := filepath.Join(t.TempDir(), "bad.sqlite")
+	raw, err := sql.Open("sqlite", bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE tool_hardcut_schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO tool_hardcut_schema_migrations(version) VALUES(0)`); err != nil {
+		_ = raw.Close()
+		t.Fatal(err)
+	}
+	_ = raw.Close()
+	if _, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: bad}); err == nil {
+		t.Fatal("typed Catalog opened incompatible schema database")
 	}
 	if _, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: filepath.Join(t.TempDir(), "missing.sqlite")}); err == nil {
 		t.Fatal("typed Catalog created missing DB")
 	}
-	root, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: candidate})
+	root, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
