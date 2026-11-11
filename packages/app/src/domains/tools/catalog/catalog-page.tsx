@@ -413,12 +413,20 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
                 </div>
               ) : null}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <Button
                   variant="outline"
                   onClick={() => setToolView("schemas")}
                 >
                   {t("View schemas")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void navigate(`/playground?toolId=${selected.toolId}`);
+                  }}
+                >
+                  {t("Open in Playground")}
                 </Button>
                 <Button onClick={() => setToolView("invoke")}>{t("Invoke tool")}</Button>
               </div>
