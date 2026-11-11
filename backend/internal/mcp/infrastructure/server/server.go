@@ -8,13 +8,10 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 const (
@@ -32,100 +29,13 @@ var (
 	ErrTaskUnsupported          = errors.New("MCP Tasks extension is not supported yet")
 )
 
-// ToolSource describes the verified source attribution for a provider.
-type ToolSource struct {
-	Kind         string
-	Name         string
-	ResourceID   string
-	ProviderName string
-	// Unavailable is an inert Host-observed source-wide capability gate.
-	// It never reflects a speculative network probe or execution authority.
-	Unavailable bool
-}
-
-// Dependencies are protocol-independent operations consumed by the MCP server adapter.
-type Dependencies struct {
-	DescribeTool    func(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
-	GetProvider     func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error)
-	InvokeTool      func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error)
-	ResolveSources  func(context.Context, []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error)
-	CatalogRevision func(context.Context) (int64, error)
-}
-
-// Adapter projects one Profile as an MCP server.
+// Adapter projects one Profile as an MCP server using verified typed projections.
 type Adapter struct {
-	profile           profiledomain.Profile
-	delivery          mcpdomain.Config
 	invocationContext governancedomain.Context
-	deps              Dependencies
+	describeTool      func(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
+	invokeTool        func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error)
 	server            *mcp.Server
-	tools             map[catalogdomain.ToolID]catalogdomain.Tool
-	typed             *typedProfileProjection // future hard-cut profile reader; no second MCP transport
-}
-
-// New constructs a Profile-scoped MCP server.
-func New(ctx context.Context, profile profiledomain.Profile, delivery mcpdomain.Config, deps Dependencies) (*Adapter, error) {
-	if deps.DescribeTool == nil || deps.GetProvider == nil || deps.InvokeTool == nil {
-		return nil, fmt.Errorf("build MCP server: all dependencies are required")
-	}
-	if delivery.ProfileID() != profile.ID() {
-		return nil, fmt.Errorf("build MCP server: delivery Profile identity mismatch")
-	}
-	tunnelID, _ := delivery.TunnelID()
-	if _, err := mcpdomain.NewConfig(delivery.ProfileID(), delivery.Mode(), tunnelID, delivery.DirectToolIDs()); err != nil {
-		return nil, fmt.Errorf("build MCP server: delivery: %w", err)
-	}
-
-	profileScope, err := governancedomain.ProfileScope(profile.ID().String())
-	if err != nil {
-		return nil, fmt.Errorf("build MCP server: profile scope: %w", err)
-	}
-	principal, err := governancedomain.NewPrincipal(
-		governancedomain.PrincipalService,
-		"profile:"+profile.ID().String(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("build MCP server: principal: %w", err)
-	}
-	invocationContext, err := governancedomain.NewContext(
-		governancedomain.OriginMCP,
-		principal,
-		profileScope,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("build MCP server: invocation context: %w", err)
-	}
-
-	adapter := &Adapter{
-		profile:           profile,
-		delivery:          delivery,
-		invocationContext: invocationContext,
-		deps:              deps,
-		server: mcp.NewServer(
-			&mcp.Implementation{Name: serverName, Version: serverVersion},
-			nil,
-		),
-		tools: make(map[catalogdomain.ToolID]catalogdomain.Tool),
-	}
-
-	for _, toolID := range profile.ToolIDs() {
-		tool, err := deps.DescribeTool(ctx, toolID)
-		if err != nil {
-			return nil, fmt.Errorf("build MCP server: describe tool %s: %w", toolID, err)
-		}
-		adapter.tools[toolID] = tool
-	}
-
-	if delivery.Mode() == mcpdomain.ModeDirect || delivery.Mode() == mcpdomain.ModeHybrid {
-		if err := adapter.addDirectTools(ctx); err != nil {
-			return nil, err
-		}
-	}
-	if delivery.Mode() == mcpdomain.ModeDynamic || delivery.Mode() == mcpdomain.ModeHybrid {
-		adapter.addMetaTools()
-	}
-
-	return adapter, nil
+	typed             *typedProfileProjection
 }
 
 // MCPServer returns the underlying SDK server for transport wiring and tests.
@@ -133,168 +43,10 @@ func (a *Adapter) MCPServer() *mcp.Server {
 	return a.server
 }
 
-// Discoverable is the read-only Host attribution/availability gate shared by
-// MCP discovery and management source selection. It never grants execution.
-func (source ToolSource) Discoverable() bool {
-	return catalogapplication.SourceDiscoverable(source.Kind, source.Name, source.ResourceID, source.Unavailable)
-}
-
-func sourceDisplayName(source ToolSource) string {
-	name := source.Name
-	if name == "" {
-		name = "Unclaimed source"
-	}
-	if source.ProviderName != "" && source.ProviderName != name {
-		return name + " (" + source.ProviderName + ")"
-	}
-	return name
-}
-
-func (a *Adapter) resolveSources(ctx context.Context, pids []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
-	if len(pids) == 0 {
-		return make(map[catalogdomain.ProviderID]ToolSource), nil
-	}
-	var resolved map[catalogdomain.ProviderID]ToolSource
-	if a.deps.ResolveSources != nil {
-		var err error
-		resolved, err = a.deps.ResolveSources(ctx, pids)
-		if err != nil {
-			// Owner-join conflicts and missing catalog data are authoritative
-			// read failures, not a reason to guess another source identity.
-			return nil, fmt.Errorf("resolve MCP sources: %w", err)
-		}
-	}
-	out := make(map[catalogdomain.ProviderID]ToolSource, len(pids))
-	for _, pid := range pids {
-		src, ok := resolved[pid]
-		if !ok || src.Kind == "" || src.Kind == "unclaimed" || strings.TrimSpace(src.Name) == "" {
-			out[pid] = ToolSource{Kind: "unclaimed", Name: "Unclaimed source"}
-			continue
-		}
-		if src.Kind != "agent" && src.Kind != "sandbox" && src.Kind != "provider" {
-			out[pid] = ToolSource{Kind: "unclaimed", Name: "Unclaimed source"}
-			continue
-		}
-		out[pid] = src
-	}
-	return out, nil
-}
-
-func (a *Adapter) addDirectTools(ctx context.Context) error {
-	seenNames := make(map[string]catalogdomain.ToolID)
-	directIDs := a.delivery.DirectToolIDs()
-	if a.delivery.Mode() == mcpdomain.ModeDirect {
-		directIDs = a.profile.ToolIDs()
-	}
-	directPIDs := make([]catalogdomain.ProviderID, 0, len(directIDs))
-	for _, selectedID := range directIDs {
-		tool, ok := a.tools[selectedID]
-		if !ok {
-			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)
-		}
-		directPIDs = append(directPIDs, tool.ProviderID())
-	}
-	sources, err := a.resolveSources(ctx, directPIDs)
-	if err != nil {
-		return fmt.Errorf("build MCP server: resolve direct tool sources: %w", err)
-	}
-
-	for _, selectedID := range directIDs {
-		tool, ok := a.tools[selectedID]
-		if !ok {
-			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)
-		}
-		source := sources[tool.ProviderID()]
-		if !source.Discoverable() {
-			// Never export an orphaned or known-unavailable Tool as a
-			// selectable direct MCP Tool, even if its Profile binding remains.
-			continue
-		}
-		provider, err := a.deps.GetProvider(ctx, tool.ProviderID())
-		if err != nil {
-			return fmt.Errorf("build MCP server: get provider %s: %w", tool.ProviderID(), err)
-		}
-
-		presentation := effectivePresentation(a.profile, tool)
-		name := exportName(
-			provider.Namespace().String(),
-			presentation.name,
-			tool.ID(),
-		)
-		if existing, collision := seenNames[name]; collision && existing != tool.ID() {
-			return fmt.Errorf("build MCP server: exported tool name collision %q", name)
-		}
-		seenNames[name] = tool.ID()
-
-		sourceLabel := sourceDisplayName(source)
-		if sourceLabel != "" {
-			if presentation.title != "" {
-				if !strings.HasPrefix(presentation.title, "["+sourceLabel+"]") {
-					presentation.title = "[" + sourceLabel + "] " + presentation.title
-				}
-			} else {
-				presentation.title = "[" + sourceLabel + "] " + presentation.name
-			}
-			if presentation.description != "" {
-				if !strings.HasPrefix(presentation.description, "["+sourceLabel+"]") {
-					presentation.description = "[" + sourceLabel + "] " + presentation.description
-				}
-			} else {
-				presentation.description = "Source: " + sourceLabel
-			}
-		}
-
-		mcpTool, err := exportedTool(name, presentation, tool)
-		if err != nil {
-			return fmt.Errorf("build MCP server: export %s: %w", tool.ID(), err)
-		}
-
-		toolID := tool.ID()
-		a.server.AddTool(mcpTool, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			response, err := a.deps.InvokeTool(ctx, invocationapplication.InvokeToolRequest{
-				ToolID:    toolID,
-				Arguments: request.Params.Arguments,
-				Context:   a.invocationContext,
-			})
-			if err != nil {
-				return nil, err
-			}
-			return mcpResult(response.Outcome)
-		})
-	}
-
-	return nil
-}
-
 type toolPresentation struct {
 	name        string
 	title       string
 	description string
-}
-
-func effectivePresentation(
-	profile profiledomain.Profile,
-	tool catalogdomain.Tool,
-) toolPresentation {
-	result := toolPresentation{
-		name:        tool.Name(),
-		title:       tool.Title(),
-		description: tool.Description(),
-	}
-	binding, ok := profile.Binding(tool.ID())
-	if !ok {
-		return result
-	}
-	if binding.Alias() != "" {
-		result.name = binding.Alias()
-	}
-	if binding.TitleOverride() != "" {
-		result.title = binding.TitleOverride()
-	}
-	if binding.DescriptionOverride() != "" {
-		result.description = binding.DescriptionOverride()
-	}
-	return result
 }
 
 func exportedTool(

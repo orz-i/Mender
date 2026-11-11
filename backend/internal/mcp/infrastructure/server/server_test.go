@@ -19,6 +19,7 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	supply "github.com/orz-i/Mender/backend/internal/profile/infrastructure/typedsupply"
 )
 
 func TestDirectProfileListsAndCallsOnlySelectedTools(t *testing.T) {
@@ -109,18 +110,15 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 		t.Fatal("describe hidden Tool expected error")
 	}
 
-	hiddenCall, err := client.CallTool(context.Background(), &mcp.CallToolParams{
+	_, err = client.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      metaCallName,
 		Arguments: json.RawMessage(`{"toolId":"` + fixture.tools[2].ID().String() + `","arguments":{}}`),
 	})
-	if err != nil {
-		t.Fatalf("call hidden Tool transport error = %v", err)
+	if err == nil {
+		t.Fatal("call hidden Tool expected error")
 	}
-	if !hiddenCall.IsError {
-		t.Fatal("call hidden Tool did not map Profile rejection to MCP Tool error")
-	}
-	if got := fixture.invokedIDs(); len(got) != 1 || got[0] != fixture.tools[2].ID() {
-		t.Fatalf("hidden Tool did not reach authoritative Invocation boundary: %v", got)
+	if got := fixture.invokedIDs(); len(got) != 0 {
+		t.Fatalf("hidden Tool unexpectedly reached Invocation boundary: %v", got)
 	}
 
 	callResult, err := client.CallTool(context.Background(), &mcp.CallToolParams{
@@ -133,8 +131,7 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 	if callResult.IsError {
 		t.Fatalf("call visible Tool returned IsError")
 	}
-	if got := fixture.invokedIDs(); len(got) != 2 ||
-		got[0] != fixture.tools[2].ID() || got[1] != fixture.tools[0].ID() {
+	if got := fixture.invokedIDs(); len(got) != 1 || got[0] != fixture.tools[0].ID() {
 		t.Fatalf("invoked ToolIDs = %v", got)
 	}
 }
@@ -175,7 +172,7 @@ func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
 		t.Fatalf("direct tools = %#v", listed.Tools)
 	}
 	if direct.Title != "[GitHub] Open production issue" ||
-		direct.Description != "[GitHub] Open an issue in the production tracker." {
+		direct.Description != "Open an issue in the production tracker." {
 		t.Fatalf(
 			"direct presentation = title %q description %q",
 			direct.Title,
@@ -285,28 +282,42 @@ func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
 		[]profiledomain.ToolBinding{firstBinding, secondBinding},
 	)
 
+	srcRef, _ := catalogdomain.ProviderSource(fixture.provider.ID())
+	fixture.snapshot = supply.Snapshot{
+		ProfileID: profile.Profile.ID().String(),
+		Mode:      "direct",
+		Sources: []supply.Source{
+			{
+				SourceID:   srcRef.String(),
+				SourceKind: "provider",
+				SourceName: fixture.provider.DisplayName(),
+				Tools: []supply.Tool{
+					{ToolID: first.ID().String(), SourceID: srcRef.String(), SourceKey: first.SourceKey(), Name: first.Name(), Title: first.Title(), Direct: true},
+					{ToolID: second.ID().String(), SourceID: srcRef.String(), SourceKey: second.SourceKey(), Name: second.Name(), Title: second.Title(), Direct: true},
+				},
+			},
+		},
+		Direct: []supply.Export{
+			{ToolID: first.ID().String(), Name: "github__collision_name", SourceID: srcRef.String()},
+			{ToolID: second.ID().String(), Name: "github__collision_name", SourceID: srcRef.String()},
+		},
+	}
+
 	byID := map[catalogdomain.ToolID]catalogdomain.Tool{
 		first.ID():  first,
 		second.ID(): second,
 	}
-	_, err = New(context.Background(), profile.Profile, profile.Config, Dependencies{
+	_, err = NewTyped(context.Background(), profile.Profile.ID().String(), TypedDependencies{
+		Profiles: fixture,
 		DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
 			return byID[id], nil
-		},
-		GetProvider: func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error) {
-			return fixture.provider, nil
-		},
-		ResolveSources: func(context.Context, []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
-			return map[catalogdomain.ProviderID]ToolSource{
-				fixture.provider.ID(): {Kind: "provider", Name: fixture.provider.DisplayName(), ResourceID: fixture.provider.ID().String()},
-			}, nil
 		},
 		InvokeTool: func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
 			return invocationapplication.InvokeToolResponse{}, nil
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "exported tool name collision") {
-		t.Fatalf("New() error = %v, want normalized exported-name collision", err)
+	if err == nil || !strings.Contains(err.Error(), "colliding direct export") {
+		t.Fatalf("NewTyped() error = %v, want colliding direct export", err)
 	}
 }
 
@@ -409,8 +420,15 @@ type serverFixture struct {
 	tools    []catalogdomain.Tool
 
 	mu                 sync.Mutex
+	snapshot           supply.Snapshot
 	invoked            []catalogdomain.ToolID
 	invocationContexts []governancedomain.Context
+}
+
+func (f *serverFixture) Project(_ context.Context, id string) (supply.Snapshot, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.snapshot, nil
 }
 
 func newServerFixture(t *testing.T) *serverFixture {
@@ -490,28 +508,84 @@ func (f *serverFixture) adapter(t *testing.T, profile fixtureProfile) *Adapter {
 		byID[tool.ID()] = tool
 	}
 
-	adapter, err := New(context.Background(), profile.Profile, profile.Config, Dependencies{
+	srcRef, _ := catalogdomain.ProviderSource(f.provider.ID())
+	src := supply.Source{
+		SourceID:   srcRef.String(),
+		SourceKind: "provider",
+		SourceName: f.provider.DisplayName(),
+	}
+	var directExports []supply.Export
+	mode := "dynamic"
+	if profile.Config.Mode() == mcpdomain.ModeDirect {
+		mode = "direct"
+	} else if profile.Config.Mode() == mcpdomain.ModeHybrid {
+		mode = "hybrid"
+	}
+
+	directIDs := profile.Config.DirectToolIDs()
+	if profile.Config.Mode() == mcpdomain.ModeDirect {
+		directIDs = profile.ToolIDs()
+	}
+
+	for _, tool := range f.tools {
+		if profile.Contains(tool.ID()) {
+			binding, _ := profile.Binding(tool.ID())
+			name := tool.Name()
+			if binding.Alias() != "" {
+				name = binding.Alias()
+			}
+			title := tool.Title()
+			if binding.TitleOverride() != "" {
+				title = binding.TitleOverride()
+			}
+			desc := tool.Description()
+			if binding.DescriptionOverride() != "" {
+				desc = binding.DescriptionOverride()
+			}
+			isDirect := false
+			for _, did := range directIDs {
+				if did == tool.ID() {
+					isDirect = true
+					break
+				}
+			}
+			src.Tools = append(src.Tools, supply.Tool{
+				ToolID:      tool.ID().String(),
+				SourceID:    srcRef.String(),
+				SourceKey:   tool.SourceKey(),
+				Name:        name,
+				Title:       title,
+				Description: desc,
+				Direct:      isDirect,
+			})
+			if isDirect {
+				expName := exportName(f.provider.Namespace().String(), name, tool.ID())
+				directExports = append(directExports, supply.Export{
+					ToolID:   tool.ID().String(),
+					Name:     expName,
+					SourceID: srcRef.String(),
+				})
+			}
+		}
+	}
+
+	f.mu.Lock()
+	f.snapshot = supply.Snapshot{
+		ProfileID: profile.Profile.ID().String(),
+		Mode:      mode,
+		Sources:   []supply.Source{src},
+		Direct:    directExports,
+	}
+	f.mu.Unlock()
+
+	adapter, err := NewTyped(context.Background(), profile.Profile.ID().String(), TypedDependencies{
+		Profiles: f,
 		DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
 			tool, ok := byID[id]
 			if !ok {
 				return catalogdomain.Tool{}, catalogapplication.ErrToolNotFound
 			}
 			return tool, nil
-		},
-		GetProvider: func(_ context.Context, id catalogdomain.ProviderID) (catalogdomain.Provider, error) {
-			if id != f.provider.ID() {
-				return catalogdomain.Provider{}, catalogapplication.ErrProviderNotFound
-			}
-			return f.provider, nil
-		},
-		ResolveSources: func(_ context.Context, ids []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
-			sources := make(map[catalogdomain.ProviderID]ToolSource)
-			for _, id := range ids {
-				if id == f.provider.ID() {
-					sources[id] = ToolSource{Kind: "provider", Name: f.provider.DisplayName(), ResourceID: id.String()}
-				}
-			}
-			return sources, nil
 		},
 		InvokeTool: func(_ context.Context, request invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
 			f.mu.Lock()
@@ -541,7 +615,7 @@ func (f *serverFixture) adapter(t *testing.T, profile fixtureProfile) *Adapter {
 		},
 	})
 	if err != nil {
-		t.Fatalf("New() error = %v", err)
+		t.Fatalf("NewTyped() error = %v", err)
 	}
 	return adapter
 }
@@ -612,9 +686,10 @@ func testCanonicalTool(
 
 	toolID, _ := catalogdomain.ParseToolID(rawID)
 	schema, _ := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
-	tool, err := catalogdomain.NewTool(
+	source, _ := catalogdomain.ProviderSource(providerID)
+	tool, err := catalogdomain.NewToolFromSource(
 		toolID,
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:   sourceKey,
 			Name:        name,

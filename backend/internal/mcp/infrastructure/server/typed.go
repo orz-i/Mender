@@ -17,16 +17,15 @@ import (
 	supply "github.com/orz-i/Mender/backend/internal/profile/infrastructure/typedsupply"
 )
 
-// TypedProfileReader is the existing F1, read-only Profile/SourceRef projection.
+// TypedProfileReader provides read-only Profile/SourceRef projections.
 // It is discovery data, not an execution grant; actual calls use the canonical
 // Invocation pipeline, which rechecks Profile/Policy/target authority.
 type TypedProfileReader interface {
 	Project(context.Context, string) (supply.Snapshot, error)
 }
 
-// TypedDependencies replace the Provider-ID metadata resolver with the
-// existing typed Profile projection. F4 retires the Provider-v2 constructor
-// rather than keeping two server configurations in the running Runtime.
+// TypedDependencies supply verified Profile, Catalog and Invocation operations
+// for the typed MCP server adapter.
 type TypedDependencies struct {
 	Profiles     TypedProfileReader
 	DescribeTool func(context.Context, catalog.ToolID) (catalog.Tool, error)
@@ -38,9 +37,8 @@ type typedProfileProjection struct {
 	read TypedProfileReader
 }
 
-// NewTyped uses the SAME Adapter, MCP transport, result mapping and canonical
-// invocation as the old constructor. It is not wired to production bootstrap:
-// F4 must switch Catalog/Profile/Runtime atomically before using this path.
+// NewTyped constructs a Profile-scoped MCP server backed by verified typed
+// Profile projection and single governed Invocation.
 func NewTyped(ctx context.Context, profileID string, deps TypedDependencies) (*Adapter, error) {
 	if deps.Profiles == nil || deps.DescribeTool == nil || deps.InvokeTool == nil {
 		return nil, fmt.Errorf("build typed MCP server: verified Profile, Catalog and Invocation required")
@@ -62,9 +60,9 @@ func NewTyped(ctx context.Context, profileID string, deps TypedDependencies) (*A
 	}
 	adapter := &Adapter{
 		invocationContext: caller,
-		deps:              Dependencies{DescribeTool: deps.DescribeTool, InvokeTool: deps.InvokeTool},
+		describeTool:      deps.DescribeTool,
+		invokeTool:        deps.InvokeTool,
 		server:            mcp.NewServer(&mcp.Implementation{Name: serverName, Version: serverVersion}, nil),
-		tools:             make(map[catalog.ToolID]catalog.Tool),
 		typed:             &typedProfileProjection{id: profileID, read: deps.Profiles},
 	}
 	snapshot, err := adapter.typedSnapshot(ctx)
@@ -85,7 +83,7 @@ func NewTyped(ctx context.Context, profileID string, deps TypedDependencies) (*A
 			seen[direct.Name] = direct.ToolID
 			selected, found := snapshotTool(snapshot, direct.ToolID)
 			if !found || selected.SourceID != direct.SourceID || !selected.Direct {
-				return nil, fmt.Errorf("build typed MCP server: direct Tool outside verified Profile")
+				return nil, fmt.Errorf("build typed MCP server: direct Tool outside verified Profile: %w", ErrToolOutsideProfile)
 			}
 			tool, err := adapter.verifiedTypedTool(ctx, selected)
 			if err != nil {
@@ -160,7 +158,7 @@ func (a *Adapter) verifiedTypedTool(ctx context.Context, selected supply.Tool) (
 	if err != nil {
 		return catalog.Tool{}, err
 	}
-	tool, err := a.deps.DescribeTool(ctx, id)
+	tool, err := a.describeTool(ctx, id)
 	if err != nil {
 		return catalog.Tool{}, err
 	}
@@ -185,7 +183,7 @@ func (a *Adapter) invokeTyped(ctx context.Context, id string, args json.RawMessa
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
 	}
-	response, err := a.deps.InvokeTool(ctx, invocation.InvokeToolRequest{
+	response, err := a.invokeTool(ctx, invocation.InvokeToolRequest{
 		ToolID: toolID, Arguments: args, Context: a.invocationContext,
 	})
 	if err != nil {

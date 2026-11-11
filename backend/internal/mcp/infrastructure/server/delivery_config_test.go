@@ -2,39 +2,22 @@ package server
 
 import (
 	"context"
-	"strings"
+	"errors"
 	"testing"
 
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	invocationapp "github.com/orz-i/Mender/backend/internal/invocation/application"
-	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	supply "github.com/orz-i/Mender/backend/internal/profile/infrastructure/typedsupply"
 )
 
 func TestDeliveryConfigurationCannotExpandProfileSelection(t *testing.T) {
-	fixture := newServerFixture(t)
-	profile := fixture.profile(t, mcpdomain.ModeHybrid, []profiledomain.ToolBindingSpec{{ToolID: fixture.tools[0].ID()}}, fixture.tools[2].ID())
-	deps := Dependencies{
-		DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
-			return fixture.tools[0], nil
-		},
-		GetProvider: func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error) {
-			return fixture.provider, nil
-		},
-		InvokeTool: func(context.Context, invocationapp.InvokeToolRequest) (invocationapp.InvokeToolResponse, error) {
-			t.Fatal("configuration check invoked Tool")
-			return invocationapp.InvokeToolResponse{}, nil
-		},
-	}
-	if _, err := New(context.Background(), profile.Profile, profile.Config, deps); err == nil || !strings.Contains(err.Error(), "missing from profile projection") {
+	f := newTypedMCPFixture(t)
+	// Direct tool missing from verified profile projection is rejected
+	f.snapshot.Direct = []supply.Export{{ToolID: "tool_missing", Name: "missing", SourceID: "native:workspace"}}
+	if _, err := NewTyped(context.Background(), typedProfileID, TypedDependencies{Profiles: f, DescribeTool: f.describe, InvokeTool: f.invoke}); !errors.Is(err, ErrToolOutsideProfile) {
 		t.Fatalf("out-of-scope direct selection accepted: %v", err)
 	}
-	otherID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000002")
-	otherConfig, err := mcpdomain.NewConfig(otherID, mcpdomain.ModeDynamic, "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := New(context.Background(), profile.Profile, otherConfig, deps); err == nil || !strings.Contains(err.Error(), "identity mismatch") {
-		t.Fatalf("another Profile's delivery accepted: %v", err)
+
+	// Invalid Profile ID format is rejected
+	if _, err := NewTyped(context.Background(), "invalid-profile-id", TypedDependencies{Profiles: f, DescribeTool: f.describe, InvokeTool: f.invoke}); err == nil {
+		t.Fatalf("invalid profile ID accepted")
 	}
 }
