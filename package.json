@@ -29,6 +29,7 @@
     "provider-plugin:sdk:test": "node scripts/check-plugins.mjs provider-plugin:sdk:test",
     "provider-plugin:sdk:test:race": "node scripts/check-plugins.mjs provider-plugin:sdk:test:race",
     "run:cli": "go run ./backend/cmd/mender",
+    "run:desktop": "node scripts/run-desktop.mjs",
     "run:server": "go run ./backend/cmd/menderd",
     "release:checksums": "node scripts/checksums.mjs",
     "release:checksums:verify": "node scripts/verify-checksums.mjs",

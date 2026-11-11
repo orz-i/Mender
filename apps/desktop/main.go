@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	goRuntime "runtime"
 	"time"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -19,7 +20,10 @@ import (
 var assets embed.FS
 
 //go:embed build/appicon.png
-var appIcon []byte
+var appIconPNG []byte
+
+//go:embed build/windows/icon.ico
+var appIconICO []byte
 
 func main() {
 	if err := run(); err != nil {
@@ -103,8 +107,12 @@ func run() error {
 	window.Center()
 
 	tray := app.SystemTray.New()
-	if len(appIcon) > 0 {
-		tray.SetIcon(appIcon)
+	icon := appIconPNG
+	if goRuntime.GOOS == "windows" && len(appIconICO) > 0 {
+		icon = appIconICO
+	}
+	if len(icon) > 0 {
+		tray.SetIcon(icon)
 	}
 	tray.SetTooltip(windowTitle)
 	trayMenu := app.NewMenu()
