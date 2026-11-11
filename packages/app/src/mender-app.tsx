@@ -34,7 +34,7 @@ import { ProfileMCPDeliveryPage } from "./domains/profiles/profile-mcp-delivery-
 import { ProfileSkillDeliveryPage } from "./domains/profiles/profile-skill-delivery-page";
 import { ProfileCLIDeliveryPage } from "./domains/profiles/profile-cli-delivery-page";
 import { ProfileAgentPluginPage } from "./domains/profiles/profile-agent-plugin-page";
-import { ToolsPage, ToolServicePage } from "./domains/tools";
+import { ToolPlaygroundPage, ToolsPage, ToolServicePage } from "./domains/tools";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
 import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";
@@ -42,7 +42,9 @@ import { ExternalSandboxCreatePage } from "./domains/sandboxes/sandbox-external-
 import { SkillsPage } from "./domains/skills/skills-page";
 import { TunnelsPage } from "./domains/tunnels/tunnels-page";
 import { useLocale } from "./i18n/i18n";
+import { DesktopHostProvider, type DesktopWindowControls } from "./shell/desktop-host-context";
 import { ManagementShell } from "./shell/management-shell";
+import { WorkbenchShell } from "./shell/workbench-shell";
 
 export function MenderApp({
   client,
@@ -55,6 +57,9 @@ export function MenderApp({
   installSkill,
   deployProfileSkills,
   exportProfilePlugin,
+  revealLocalPath,
+  windowControls,
+  variant = "management",
 }: {
   client: ManagementClient;
   localOwner?: LocalOwnerCapabilities;
@@ -66,13 +71,37 @@ export function MenderApp({
   installSkill?: () => Promise<SkillInstallation | null>;
   deployProfileSkills?: (slug: string, target: SkillDeployment["target"]) => Promise<SkillDeployment[] | null>;
   exportProfilePlugin?: (slug: string, input: ExportProfilePluginInput) => Promise<ProfileAgentPluginExport | null>;
+  revealLocalPath?: ((path: string) => Promise<void>) | undefined;
+  windowControls?: DesktopWindowControls | undefined;
+  variant?: "management" | "workbench";
 }) {
   useLocale();
 
+  const shellElement =
+    variant === "workbench" ? (
+      <WorkbenchShell
+        client={client}
+        approvals={localOwner?.approvals}
+        hasLocalOwner={localOwner !== undefined}
+        windowControls={windowControls}
+      />
+    ) : (
+      <ManagementShell
+        client={client}
+        approvals={localOwner?.approvals}
+        hasLocalOwner={localOwner !== undefined}
+      />
+    );
+
   return (
-    <TooltipProvider>
-      <Routes>
-        <Route element={<ManagementShell client={client} approvals={localOwner?.approvals} />}>
+    <DesktopHostProvider
+      isDesktop={variant === "workbench"}
+      revealLocalPath={revealLocalPath}
+      windowControls={windowControls}
+    >
+      <TooltipProvider>
+        <Routes>
+          <Route element={shellElement}>
           <Route index element={<OverviewPage client={client} />} />
           <Route
             path="plugins"
@@ -91,6 +120,7 @@ export function MenderApp({
             path="plugins/:pluginKey"
             element={<PluginDetailPage client={client} />}
           />
+          <Route path="playground" element={<ToolPlaygroundPage client={client} />} />
           <Route path="tools" element={<ToolsPage client={client} />} />
           <Route path="tools/:providerId" element={<ToolServicePage client={client} />} />
           <Route
@@ -148,5 +178,6 @@ export function MenderApp({
         </Route>
       </Routes>
     </TooltipProvider>
+    </DesktopHostProvider>
   );
 }

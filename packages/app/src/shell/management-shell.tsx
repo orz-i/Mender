@@ -1,27 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   BellIcon,
-  BlocksIcon,
-  BotIcon,
-  BookOpenIcon,
-  BoxIcon,
-  CableIcon,
   ChevronLeftIcon,
   CommandIcon,
-  GaugeIcon,
-  KeyRoundIcon,
   LanguagesIcon,
-  Layers3Icon,
-  LayoutDashboardIcon,
   MenuIcon,
   RefreshCwIcon,
-  ScrollTextIcon,
   SearchIcon,
   Settings2Icon,
-  ShieldCheckIcon,
-  WrenchIcon,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 import type { AgentApprovalCapability, ManagementClient } from "@mender/sdk";
@@ -34,52 +21,20 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@mender/ui/components/t
 
 import { BrandMark } from "../brand/brand-mark";
 import { setLocale, t, useLocale } from "../i18n/i18n";
+import {
+  APPEARANCE_STORAGE_KEY,
+  flatNavigation,
+  primaryNavigation,
+  readAppearance,
+  secondaryNavigation,
+} from "./navigation";
+import type { Appearance } from "./navigation";
 import { PageHeadingContext, getPageTrail } from "./page-chrome";
-
-type NavigationItem = { to: string; label: string; icon: LucideIcon };
-
-const primaryNavigation: NavigationItem[] = [
-  { to: "/", label: "Overview", icon: LayoutDashboardIcon },
-  { to: "/tools", label: "Tools", icon: WrenchIcon },
-  { to: "/profiles", label: "Profiles", icon: Layers3Icon },
-  { to: "/agents", label: "Agents", icon: BotIcon },
-  { to: "/sandboxes", label: "Sandboxes", icon: BoxIcon },
-  { to: "/skills", label: "Skills", icon: BookOpenIcon },
-  { to: "/plugins", label: "Plugin Marketplace", icon: BlocksIcon },
-  { to: "/audit", label: "Audit", icon: ScrollTextIcon },
-];
-
-const secondaryNavigation: Array<{ label: string; items: NavigationItem[] }> = [
-  {
-    label: "Connections",
-    items: [
-      { to: "/tunnels", label: "Tunnels", icon: CableIcon },
-      { to: "/credentials", label: "Credentials", icon: KeyRoundIcon },
-    ],
-  },
-  {
-    label: "Advanced",
-    items: [
-      { to: "/approvals", label: "Approvals", icon: BellIcon },
-      { to: "/policy", label: "Policy", icon: ShieldCheckIcon },
-      { to: "/runtime", label: "Runtime", icon: GaugeIcon },
-    ],
-  },
-];
-const flatNavigation = [...primaryNavigation, ...secondaryNavigation.flatMap((group) => group.items)];
-
-const APPEARANCE_STORAGE_KEY = "mender.appearance";
-type Appearance = "light" | "dark" | "system";
-
-function readAppearance(): Appearance {
-  if (typeof window === "undefined") return "light";
-  const stored = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
-  return stored === "dark" || stored === "system" ? stored : "light";
-}
 
 export function ManagementShell({ client, approvals }: {
   client: ManagementClient;
   approvals?: AgentApprovalCapability | undefined;
+  hasLocalOwner?: boolean;
 }) {
   const locale = useLocale();
   const location = useLocation();
@@ -95,6 +50,13 @@ export function ManagementShell({ client, approvals }: {
 
   const updatePageHeading = useCallback((path: string, value?: string) => {
     setPageHeading((current) => value ? { path, value } : current?.path === path ? null : current);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.platform = "web";
+    return () => {
+      delete document.documentElement.dataset.platform;
+    };
   }, []);
 
   useEffect(() => {

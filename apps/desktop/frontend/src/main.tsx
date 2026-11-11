@@ -4,7 +4,7 @@ import { HashRouter } from "react-router";
 
 import { MenderApp, t } from "@mender/app";
 import type { ExportProfilePluginInput, SkillDeployment } from "@mender/sdk";
-import { Browser, Clipboard, Dialogs } from "@wailsio/runtime";
+import { Browser, Clipboard, Dialogs, Window } from "@wailsio/runtime";
 
 import "@mender/ui/globals.css";
 
@@ -15,6 +15,7 @@ import {
   getDesktopProfileCLI,
   installDesktopPlugin,
   installDesktopSkill,
+  revealDesktopPath,
 } from "./desktop-client";
 import { createDesktopLocalOwnerCapabilities } from "./desktop-local-owner";
 
@@ -106,10 +107,23 @@ async function chooseAndExportProfilePlugin(slug: string, input: ExportProfilePl
   return exportDesktopProfilePlugin(slug, input, outputParent);
 }
 
+const windowControls = {
+  minimise: async () => {
+    await Window.Minimise();
+  },
+  toggleMaximise: async () => {
+    await Window.ToggleMaximise();
+  },
+  close: async () => {
+    await Window.Close();
+  },
+};
+
 createRoot(rootElement).render(
   <StrictMode>
     <HashRouter>
       <MenderApp
+        variant="workbench"
         client={client}
         localOwner={localOwner}
         openExternalURL={Browser.OpenURL}
@@ -120,6 +134,8 @@ createRoot(rootElement).render(
         installSkill={chooseAndInstallSkill}
         deployProfileSkills={chooseAndDeployProfileSkills}
         exportProfilePlugin={chooseAndExportProfilePlugin}
+        revealLocalPath={revealDesktopPath}
+        windowControls={windowControls}
       />
     </HashRouter>
   </StrictMode>,

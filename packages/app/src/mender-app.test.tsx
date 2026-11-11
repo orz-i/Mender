@@ -196,6 +196,110 @@ describe("MenderApp Magpie-inspired native workspace", () => {
     expect(screen.getByText("No invocation records yet.")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Workspace summary" })).toBeTruthy();
   });
+
+  it("mounts Desktop Workbench shell with custom titlebar, activity bar rail, and status bar", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <MenderApp
+          variant="workbench"
+          client={overviewClient()}
+          localOwner={{
+            approvals: {
+              listPendingAgentApprovals: () => Promise.resolve({ approvals: [] }),
+              listAgentApprovals: () => Promise.resolve({ approvals: [] }),
+              decideAgentApproval: () => Promise.resolve({} as never),
+              getAgentApprovalPolicy: () => Promise.resolve({} as never),
+              listAgentApprovalPolicies: () => Promise.resolve({ policies: [] }),
+              setAgentApprovalPolicy: () => Promise.resolve({} as never),
+              releasePendingAgentApprovals: () => Promise.resolve({ released: 0 }),
+            },
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(document.documentElement.dataset.platform).toBe("desktop");
+    expect(document.querySelector('[data-slot="workbench-layout"]')?.getAttribute("data-layout")).toBe("workbench");
+    expect(document.querySelector('[data-slot="workbench-titlebar"]')).toBeTruthy();
+    expect(screen.getByText("Workbench")).toBeTruthy();
+
+    const rail = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(rail.getAttribute("data-slot")).toBe("workbench-activity-bar");
+    for (const name of ["Overview", "Tools", "Profiles", "Agents", "Sandboxes", "Skills", "Plugin Marketplace", "Audit"]) {
+      expect(within(rail).getByRole("link", { name })).toBeTruthy();
+    }
+
+    const statusBar = document.querySelector('[data-slot="workbench-statusbar"]');
+    expect(statusBar).toBeTruthy();
+    expect(await within(statusBar as HTMLElement).findByText("Runtime: Connected")).toBeTruthy();
+    expect(within(statusBar as HTMLElement).getByText("Local Owner: Active")).toBeTruthy();
+  });
+
+  it("navigates and triggers quick command palette in Workbench shell", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <MenderApp variant="workbench" client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    const searchBtn = screen.getByRole("button", { name: "Search pages…" });
+    fireEvent.click(searchBtn);
+    expect(screen.getByRole("heading", { name: "Quick navigation" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search pages" }), { target: { value: "Runtime" } });
+    const runtimeOption = screen.getByRole("button", { name: "Runtime" });
+    fireEvent.click(runtimeOption);
+    expect(screen.getByRole("heading", { name: "Runtime" })).toBeTruthy();
+  });
+
+  it("toggles the desktop bottom console drawer in Workbench shell", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <MenderApp variant="workbench" client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    expect(document.querySelector('[data-slot="workbench-console"]')).toBeNull();
+    const toggleBtn = screen.getByRole("button", { name: "Toggle Console" });
+    fireEvent.click(toggleBtn);
+    expect(document.querySelector('[data-slot="workbench-console"]')).toBeTruthy();
+    expect(screen.getByText("Console Logs")).toBeTruthy();
+    expect(screen.getByText("Workbench initialized")).toBeTruthy();
+
+    const closeBtn = screen.getByRole("button", { name: "Close console" });
+    fireEvent.click(closeBtn);
+    expect(document.querySelector('[data-slot="workbench-console"]')).toBeNull();
+  });
+
+  it("renders desktop window controls and shortcut indicators when provided", () => {
+    const minimise = vi.fn().mockResolvedValue(undefined);
+    const toggleMaximise = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <MenderApp
+          variant="workbench"
+          client={overviewClient()}
+          windowControls={{ minimise, toggleMaximise, close }}
+        />
+      </MemoryRouter>,
+    );
+
+    const minBtn = screen.getByRole("button", { name: "Minimise" });
+    const maxBtn = screen.getByRole("button", { name: "Toggle maximise" });
+    const closeBtn = screen.getByRole("button", { name: "Close window" });
+
+    fireEvent.click(minBtn);
+    expect(minimise).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(maxBtn);
+    expect(toggleMaximise).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(closeBtn);
+    expect(close).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByText("⌘K Palette · ⌘` Console · ⌘⇧P Playground")).toBeTruthy();
+  });
 });
 
 function overviewClient(): ManagementClient {

@@ -18,7 +18,7 @@ const client = createMenderClient({ baseUrl: "/api/v1" });
 createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
-      <MenderApp client={client} />
+      <MenderApp variant="management" client={client} />
     </BrowserRouter>
   </StrictMode>,
 );

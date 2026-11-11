@@ -135,6 +135,32 @@
   select {
     font: inherit;
   }
+
+  .app-drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  [data-platform="desktop"] ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  [data-platform="desktop"] ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [data-platform="desktop"] ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted-foreground) 25%, transparent);
+    border-radius: 9999px;
+  }
+
+  [data-platform="desktop"] ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
