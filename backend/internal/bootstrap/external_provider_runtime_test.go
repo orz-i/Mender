@@ -84,6 +84,8 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		}
 	})
 
+	ensureTestingRuntimeIsolation(t, runtime)
+
 	installation, err := runtime.InstallProviderPlugin(ctx, sourceRoot)
 	if err != nil {
 		t.Fatalf("InstallProviderPlugin() error = %v", err)

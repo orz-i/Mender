@@ -169,7 +169,8 @@ func TestSyncProviderToolsPreservesIdentityAndReplacesSnapshot(t *testing.T) {
 
 	existingID := mustToolID(t, "tool_00000000000000000000000000000001")
 	input := mustSchema(t, `{"type":"object"}`)
-	old, _ := domain.NewTool(existingID, providerID, domain.ToolSpec{
+	sourceRef, _ := domain.ProviderSource(providerID)
+	old, _ := domain.NewToolFromSource(existingID, sourceRef, domain.ToolSpec{
 		SourceKey:   "issues.create",
 		Name:        "create_issue",
 		InputSchema: input,
@@ -261,9 +262,10 @@ func TestDescribeAndSearchToolsUseApplicationPorts(t *testing.T) {
 
 	store, providerID := catalogWithProvider(t)
 	input := mustSchema(t, `{"type":"object"}`)
-	githubTool, _ := domain.NewTool(
+	sourceRef, _ := domain.ProviderSource(providerID)
+	githubTool, _ := domain.NewToolFromSource(
 		mustToolID(t, "tool_00000000000000000000000000000001"),
-		providerID,
+		sourceRef,
 		domain.ToolSpec{
 			SourceKey:   "issues.create",
 			Name:        "create_issue",
@@ -274,9 +276,9 @@ func TestDescribeAndSearchToolsUseApplicationPorts(t *testing.T) {
 		},
 		testTime(),
 	)
-	other, _ := domain.NewTool(
+	other, _ := domain.NewToolFromSource(
 		mustToolID(t, "tool_00000000000000000000000000000002"),
-		providerID,
+		sourceRef,
 		domain.ToolSpec{
 			SourceKey:   "repos.get",
 			Name:        "get_repository",

@@ -16,9 +16,10 @@ func TestToolRefreshPreservesIdentity(t *testing.T) {
 
 	id, _ := ParseToolID("tool_0123456789abcdef0123456789abcdef")
 	providerID, _ := ParseProviderID("prov_0123456789abcdef0123456789abcdef")
+	source, _ := ProviderSource(providerID)
 	created := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
 
-	tool, err := NewTool(id, providerID, ToolSpec{
+	tool, err := NewToolFromSource(id, source, ToolSpec{
 		SourceKey:   "issues.create",
 		Name:        "create_issue",
 		Title:       "Create issue",
@@ -27,7 +28,7 @@ func TestToolRefreshPreservesIdentity(t *testing.T) {
 		Tags:        []string{"GitHub", "write", "github"},
 	}, created)
 	if err != nil {
-		t.Fatalf("NewTool() error = %v", err)
+		t.Fatalf("NewToolFromSource() error = %v", err)
 	}
 
 	updated := created.Add(time.Hour)
@@ -66,18 +67,36 @@ func TestToolRefreshPreservesIdentity(t *testing.T) {
 	}
 }
 
-func TestToolLegacyProviderProvenanceIsTyped(t *testing.T) {
-	providerID, _ := ParseProviderID("prov_0123456789abcdef0123456789abcdef")
+func TestToolProvenanceIsTyped(t *testing.T) {
 	now := time.Now().UTC()
 	toolID, _ := ParseToolID("tool_0123456789abcdef0123456789abcdef")
 	input, _ := NewSchema([]byte(`{"type":"object"}`))
-	tool, err := NewTool(toolID, providerID, ToolSpec{SourceKey: "files.read", Name: "read", InputSchema: input}, now)
-	if err != nil {
-		t.Fatalf("NewTool: %v", err)
-	}
-	ref := tool.SourceRef()
-	if ref.Kind() != SourceProvider || ref.ID() != providerID.String() || ref.String() != "provider:"+providerID.String() {
-		t.Fatalf("unexpected source: %+v", ref)
+
+	providerID, _ := ParseProviderID("prov_0123456789abcdef0123456789abcdef")
+	provSource, _ := ProviderSource(providerID)
+	agentSource, _ := AgentSource("agent_0123456789abcdef0123456789abcdef")
+	nativeSource, _ := NativeSource("workspace")
+
+	for _, tc := range []struct {
+		name     string
+		source   SourceRef
+		expected string
+		kind     SourceKind
+	}{
+		{name: "provider source", source: provSource, expected: "provider:" + providerID.String(), kind: SourceProvider},
+		{name: "agent source", source: agentSource, expected: "agent:agent_0123456789abcdef0123456789abcdef", kind: SourceAgent},
+		{name: "native source", source: nativeSource, expected: "native:workspace", kind: SourceNative},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tool, err := NewToolFromSource(toolID, tc.source, ToolSpec{SourceKey: "test.tool", Name: "test", InputSchema: input}, now)
+			if err != nil {
+				t.Fatalf("NewToolFromSource: %v", err)
+			}
+			ref := tool.SourceRef()
+			if ref.Kind() != tc.kind || ref.String() != tc.expected {
+				t.Fatalf("unexpected source: %+v, want kind=%v string=%s", ref, tc.kind, tc.expected)
+			}
+		})
 	}
 }
 
@@ -86,10 +105,10 @@ func TestToolRefreshRejectsSourceKeyChange(t *testing.T) {
 
 	input, _ := NewSchema([]byte(`{"type":"object"}`))
 	id, _ := ParseToolID("tool_0123456789abcdef0123456789abcdef")
-	providerID, _ := ParseProviderID("prov_0123456789abcdef0123456789abcdef")
+	nativeSource, _ := NativeSource("workspace")
 	now := time.Now().UTC()
 
-	tool, err := NewTool(id, providerID, ToolSpec{
+	tool, err := NewToolFromSource(id, nativeSource, ToolSpec{
 		SourceKey:   "old",
 		Name:        "tool",
 		InputSchema: input,

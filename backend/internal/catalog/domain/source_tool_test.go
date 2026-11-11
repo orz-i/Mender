@@ -80,7 +80,7 @@ func TestToolFromSourceRejectsInvalidProvenanceAndTimestamps(t *testing.T) {
 	if _, err := NewToolFromSource(id, agent, ToolSpec{SourceKey: "agent.delegate", Name: "delegate"}, now); err == nil {
 		t.Fatal("missing schema accepted")
 	}
-	if _, err := NewTool(id, "", spec, now); err == nil {
-		t.Fatal("legacy Provider constructor accepted empty Provider")
+	if _, err := NewToolFromSource(id, SourceRef{}, spec, now); err == nil {
+		t.Fatal("empty SourceRef accepted")
 	}
 }

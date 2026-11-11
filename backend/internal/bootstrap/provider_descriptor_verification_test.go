@@ -39,6 +39,7 @@ func TestDescriptorVerificationCannotCloseRuntimeOwnedPluginProcess(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	defer func() { _ = runtime.Close() }()
 	// Model the runtime-owned process that can be admitted immediately after
 	// another verifier publishes the first descriptor. The verification owner

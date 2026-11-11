@@ -61,6 +61,7 @@ func setupExternalTunnelFixture(t *testing.T) (*Runtime, installationdomain.Inst
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	t.Cleanup(func() {
 		if err := runtime.Close(); err != nil {
 			t.Errorf("Runtime.Close: %v", err)

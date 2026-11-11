@@ -107,7 +107,11 @@ func managementFixture(t *testing.T) (Dependencies, *catalogFixture, *configurat
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool, err := catalogdomain.NewTool("tool_00000000000000000000000000000001", provider.ID(), catalogdomain.ToolSpec{
+	source, err := catalogdomain.ProviderSource(provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, err := catalogdomain.NewToolFromSource("tool_00000000000000000000000000000001", source, catalogdomain.ToolSpec{
 		SourceKey: "echo", Name: "echo", InputSchema: schema,
 	}, now)
 	if err != nil {

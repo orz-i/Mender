@@ -107,9 +107,13 @@ func guardRequest(t *testing.T, toolNumber, providerNumber int) Request {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool, err := catalogdomain.NewTool(
+	source, err := catalogdomain.ProviderSource(providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, err := catalogdomain.NewToolFromSource(
 		toolID,
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:   "tool",
 			Name:        "tool",

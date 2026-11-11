@@ -59,9 +59,9 @@ func TestDelegateExplicitTaskTitleEndToEndWithoutPersistingPrompt(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	pid, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000002")
+	source, _ := catalogdomain.AgentSource("agent_00000000000000000000000000000002")
 	tid, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000002")
-	tool, err := catalogdomain.NewTool(tid, pid, catalogdomain.ToolSpec{
+	tool, err := catalogdomain.NewToolFromSource(tid, source, catalogdomain.ToolSpec{
 		SourceKey: sourceDelegate, Name: "delegate", Title: "Delegate", Description: "Fixture",
 		InputSchema: input, OutputSchema: &output,
 	}, time.Now())

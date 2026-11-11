@@ -80,6 +80,7 @@ func TestExternalSandboxPluginGovernedLifecycleAndExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	defer func() { _ = runtime.Close() }()
 	installation, err := runtime.InstallSandboxPlugin(ctx, pkg)
 	if err != nil {
@@ -199,6 +200,7 @@ func TestExternalSandboxUnknownProvisionRequiresGovernedReconcile(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	defer func() { _ = runtime.Close() }()
 	installed, err := runtime.InstallSandboxPlugin(ctx, pkg)
 	if err != nil {
@@ -258,6 +260,7 @@ func TestExternalSandboxPolicyDenialNeverStartsPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	defer func() { _ = runtime.Close() }()
 	item, err := runtime.InstallSandboxPlugin(ctx, pkg)
 	if err != nil {
@@ -299,6 +302,7 @@ func TestExternalSandboxRuntimeRestartCannotReplayOrFallBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	installed, err := runtime.InstallSandboxPlugin(ctx, pkg)
 	if err != nil {
 		t.Fatal(err)
@@ -318,6 +322,7 @@ func TestExternalSandboxRuntimeRestartCannotReplayOrFallBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, restarted)
 	defer func() { _ = restarted.Close() }()
 	if restarted.externalProcesses.Running(installed.ID()) {
 		t.Fatal("restart catalogue launched external plugin")
@@ -362,6 +367,7 @@ func TestExternalSandboxPackageTamperFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	defer func() { _ = runtime.Close() }()
 	item, err := runtime.InstallSandboxPlugin(ctx, pkg)
 	if err != nil {
@@ -413,6 +419,7 @@ func TestExternalSandboxCannotCreateWithDisabledPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, r)
 	defer func() { _ = r.Close() }()
 	installed, err := r.InstallSandboxPlugin(ctx, source)
 	if err != nil {
@@ -462,6 +469,7 @@ func TestExternalSandboxLeaseContentionAcrossRuntimes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, first)
 	defer func() { _ = first.Close() }()
 	installed, err := first.InstallSandboxPlugin(ctx, source)
 	if err != nil {
@@ -485,6 +493,7 @@ func TestExternalSandboxLeaseContentionAcrossRuntimes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, second)
 	defer func() { _ = second.Close() }()
 	secondPlace, err := second.Sandboxes.router.Resolve(ctx, item.ID(), sandboxdomain.CapabilityRead)
 	if err != nil {

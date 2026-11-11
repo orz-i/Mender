@@ -78,9 +78,10 @@ func testTool(t *testing.T) catalogdomain.Tool {
 	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
 	providerID, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000001")
 	schema, _ := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
-	tool, err := catalogdomain.NewTool(
+	source, _ := catalogdomain.ProviderSource(providerID)
+	tool, err := catalogdomain.NewToolFromSource(
 		toolID,
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:   "echo",
 			Name:        "echo",

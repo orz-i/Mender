@@ -67,9 +67,9 @@ func TestUnsupportedNativeSessionContinuationReturnsSafeToolFailure(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	pid, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000001")
+	source, _ := catalogdomain.AgentSource("agent_00000000000000000000000000000001")
 	tid, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
-	tool, err := catalogdomain.NewTool(tid, pid, catalogdomain.ToolSpec{
+	tool, err := catalogdomain.NewToolFromSource(tid, source, catalogdomain.ToolSpec{
 		SourceKey: sourceResume, Name: "resume", Title: "Resume", Description: "Fixture",
 		InputSchema: inputs, OutputSchema: &outputs,
 	}, time.Now())

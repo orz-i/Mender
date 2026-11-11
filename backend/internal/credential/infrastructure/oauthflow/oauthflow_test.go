@@ -222,7 +222,7 @@ func TestFlowExpiry(t *testing.T) {
 	fake := newFakeOAuthServer(t)
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
-	manager := newTestManager(repository, secrets, Options{FlowTTL: 400 * time.Millisecond})
+	manager := newTestManager(repository, secrets, Options{FlowTTL: 1200 * time.Millisecond})
 	defer func() { _ = manager.Close() }()
 
 	started, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))

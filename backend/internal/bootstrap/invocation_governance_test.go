@@ -191,9 +191,13 @@ func mustGovernanceTool(
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool, err := catalogdomain.NewTool(
+	source, err := catalogdomain.ProviderSource(providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, err := catalogdomain.NewToolFromSource(
 		mustBootstrapToolID(t, "tool_00000000000000000000000000000031"),
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:   sourceKey,
 			Name:        sourceKey,

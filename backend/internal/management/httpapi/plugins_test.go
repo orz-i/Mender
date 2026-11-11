@@ -15,6 +15,7 @@ import (
 	credentialapp "github.com/orz-i/Mender/backend/internal/credential/application"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
@@ -159,6 +160,18 @@ func TestUnifiedPluginCatalogueHTTPExternalResourceFlow(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !r.RuntimeGovernance.IsolationBackend().RestrictedHostAvailable {
+		if _, err := r.RuntimeGovernance.UpdateIsolation(
+			ctx,
+			runtimegovernancedomain.IsolationSpec{
+				WorkspaceShell:   runtimegovernancedomain.IsolationHost,
+				ExternalProvider: runtimegovernancedomain.IsolationHost,
+				TunnelClient:     runtimegovernancedomain.IsolationHost,
+			},
+		); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Cleanup(func() {
 		if err := r.Close(); err != nil {

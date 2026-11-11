@@ -193,6 +193,7 @@ func TestCanonicalCatalogueInstalledThreeKindsAndUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ensureTestingRuntimeIsolation(t, runtime)
 	t.Cleanup(func() {
 		if err := runtime.Close(); err != nil {
 			t.Error(err)

@@ -36,7 +36,8 @@ func providerReferenceFixture(t *testing.T, r *Runtime) (catalogdomain.ProviderI
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool, err := catalogdomain.NewTool(id, provider.ID(), catalogdomain.ToolSpec{
+	source, _ := catalogdomain.ProviderSource(provider.ID())
+	tool, err := catalogdomain.NewToolFromSource(id, source, catalogdomain.ToolSpec{
 		SourceKey: "audit", Name: "audit", InputSchema: schema,
 	}, systemClock{}.Now())
 	if err != nil {

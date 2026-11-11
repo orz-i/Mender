@@ -159,9 +159,14 @@ func resultTool(t *testing.T, outputRaw []byte) catalogdomain.Tool {
 		output = &schema
 	}
 
-	tool, err := catalogdomain.NewTool(
+	source, err := catalogdomain.ProviderSource(providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tool, err := catalogdomain.NewToolFromSource(
 		toolID,
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:    "result-test",
 			Name:         "result-test",

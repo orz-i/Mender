@@ -163,10 +163,11 @@ func mustTool(t *testing.T) catalogdomain.Tool {
 	t.Helper()
 	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
 	providerID, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000001")
+	source, _ := catalogdomain.ProviderSource(providerID)
 	schema, _ := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
-	tool, err := catalogdomain.NewTool(
+	tool, err := catalogdomain.NewToolFromSource(
 		toolID,
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:   "echo",
 			Name:        "echo",

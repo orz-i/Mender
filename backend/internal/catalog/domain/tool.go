@@ -41,16 +41,6 @@ type ToolSpec struct {
 	Tags         []string
 }
 
-// NewTool is the current Provider-backed creation contract. The production
-// Catalog still stores provider_id until the single cross-context hard cut.
-func NewTool(id ToolID, providerID ProviderID, spec ToolSpec, now time.Time) (Tool, error) {
-	source, err := ProviderSource(providerID)
-	if err != nil {
-		return Tool{}, err
-	}
-	return NewToolFromSource(id, source, spec, now)
-}
-
 // NewToolFromSource creates a Tool with exactly one verified provenance.
 // Source identity does not grant execution or permit publication in a Profile.
 func NewToolFromSource(id ToolID, source SourceRef, spec ToolSpec, now time.Time) (Tool, error) {
@@ -67,15 +57,6 @@ func NewToolFromSource(id ToolID, source SourceRef, spec ToolSpec, now time.Time
 		return Tool{}, validationError("now", "must not be zero")
 	}
 	return toolFromParts(id, source, spec, now.UTC(), now.UTC()), nil
-}
-
-// RestoreTool rehydrates the existing Provider-only SQLite projection.
-func RestoreTool(id ToolID, providerID ProviderID, spec ToolSpec, createdAt, updatedAt time.Time) (Tool, error) {
-	source, err := ProviderSource(providerID)
-	if err != nil {
-		return Tool{}, err
-	}
-	return RestoreToolFromSource(id, source, spec, createdAt, updatedAt)
 }
 
 // RestoreToolFromSource validates a persisted Tool independent of Provider.

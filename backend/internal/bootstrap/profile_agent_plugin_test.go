@@ -29,7 +29,8 @@ func pluginTestTool(t *testing.T, r *Runtime, ctx context.Context) catalogdomain
 		t.Fatal(err)
 	}
 	id := mustBootstrapToolID(t, "tool_00000000000000000000000000000001")
-	tool, err := catalogdomain.NewTool(id, provider.ID(), catalogdomain.ToolSpec{
+	source, _ := catalogdomain.ProviderSource(provider.ID())
+	tool, err := catalogdomain.NewToolFromSource(id, source, catalogdomain.ToolSpec{
 		SourceKey: "plugin", Name: "plugin", InputSchema: schema,
 	}, systemClock{}.Now())
 	if err != nil {

@@ -173,9 +173,13 @@ func testCatalogToolFromDiscovery(
 		}
 		outputSchema = &schema
 	}
-	tool, err := catalogdomain.NewTool(
+	source, err := catalogdomain.ProviderSource(providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, err := catalogdomain.NewToolFromSource(
 		toolID,
-		providerID,
+		source,
 		catalogdomain.ToolSpec{
 			SourceKey:    discovered.SourceKey,
 			Name:         discovered.Name,
