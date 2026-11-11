@@ -21,11 +21,7 @@ type LeaseProvider interface {
 	Acquire(context.Context, governance.Context, string, workspace.Operation) (*Lease, error)
 }
 
-// Compatibility describes existing transport limits, not authorization.
-// External v1 retains omitted request defaults as part of its wire contract.
-type Compatibility struct {
-	PreserveDefaults         bool
-	MaxArgumentBytes         int
-	ArgumentLimitMessage     string
-	ArgumentLimitIsToolError bool
+// ExecutionConstraints defines physical execution limits on workspace requests.
+type ExecutionConstraints struct {
+	MaxArgumentBytes int
 }

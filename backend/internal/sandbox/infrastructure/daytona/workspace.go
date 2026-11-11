@@ -143,6 +143,12 @@ func (s *session) Read(ctx context.Context, a workspacedomain.ReadRequest) (work
 	if err := s.validateWorkspaceSession(ctx); err != nil {
 		return workspacedomain.ReadResult{}, err
 	}
+	if a.Offset == 0 {
+		a.Offset = 1
+	}
+	if a.Limit == 0 {
+		a.Limit = 200
+	}
 	rel, err := remotePath(a.Path, false)
 	if err != nil {
 		return workspacedomain.ReadResult{}, rejected(err)
@@ -168,6 +174,12 @@ func (s *session) Read(ctx context.Context, a workspacedomain.ReadRequest) (work
 func (s *session) Shell(ctx context.Context, a workspacedomain.ShellRequest) (workspacedomain.ShellResult, error) {
 	if err := s.validateWorkspaceSession(ctx); err != nil {
 		return workspacedomain.ShellResult{}, err
+	}
+	if a.Cwd == "" {
+		a.Cwd = "."
+	}
+	if a.TimeoutMS == 0 {
+		a.TimeoutMS = 30000
 	}
 	if strings.TrimSpace(a.Command) == "" || len(a.Command) > maxShellBytes {
 		return workspacedomain.ShellResult{}, rejected(fmt.Errorf("daytona shell must be nonempty and bounded"))
@@ -279,6 +291,9 @@ func (s *session) Edit(ctx context.Context, a workspacedomain.EditRequest) (work
 		replacements := 0
 		for _, entry := range a.Edits {
 			wanted := entry.ExpectedReplacements
+			if wanted == 0 {
+				wanted = 1
+			}
 			if entry.OldText == "" || wanted < 1 || wanted > 1000 || strings.Count(modified, entry.OldText) != wanted {
 				return workspacedomain.EditResult{}, rejected(fmt.Errorf("replace count mismatch"))
 			}
@@ -326,6 +341,12 @@ func (s *session) Edit(ctx context.Context, a workspacedomain.EditRequest) (work
 func (s *session) Search(ctx context.Context, a workspacedomain.SearchRequest) (workspacedomain.SearchResult, error) {
 	if err := s.validateWorkspaceSession(ctx); err != nil {
 		return workspacedomain.SearchResult{}, err
+	}
+	if a.Path == "" {
+		a.Path = "."
+	}
+	if a.MaxResults == 0 {
+		a.MaxResults = 100
 	}
 	folder, err := remotePath(a.Path, true)
 	if err != nil {

@@ -16,10 +16,9 @@ import (
 	"github.com/orz-i/Mender/backend/internal/workspace/infrastructure/sandboxbridge"
 )
 
-// NativeWorkspaceTools is the single future-Schema, host-composed Workspace
-// facts/execution adapter. The existing typed Workspace operations and Sandbox
-// Router remain the only execution implementation. It is not registered in the
-// v2 runtime: F4 must atomically switch Catalog, Profile, MCP and this adapter.
+// NativeWorkspaceTools is the host-composed Workspace facts and execution adapter.
+// The existing typed Workspace operations and Sandbox Router remain the only
+// execution implementation.
 type NativeWorkspaceTools struct {
 	Selection         workspaceapp.WorkspaceSelection
 	Router            sandboxbridge.GuardedRouter

@@ -99,6 +99,9 @@ func (i *Instance) replaceFile(input workspace.EditRequest) (workspace.EditResul
 			return workspace.EditResult{}, toolFailure(fmt.Errorf("edits[%d].oldText must not be empty", index))
 		}
 		expected := edit.ExpectedReplacements
+		if expected == 0 {
+			expected = 1
+		}
 		if expected < 1 || expected > maxExpectedReplace {
 			return workspace.EditResult{}, toolFailure(fmt.Errorf(
 				"edits[%d].expectedReplacements must be between 1 and %d",

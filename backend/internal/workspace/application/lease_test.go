@@ -40,11 +40,11 @@ func (s *sessionFixture) Shell(_ context.Context, r workspace.ShellRequest) (wor
 }
 func (*sessionFixture) Close() error { return nil }
 
-func TestOperationsDefaultOnceAndCloseOriginalLease(t *testing.T) {
+func TestOperationsPassThroughAndCloseOriginalLease(t *testing.T) {
 	ctx := context.Background()
 	s := &sessionFixture{}
 	closed := 0
-	newLease := func() *Lease { return NewLease(s, func() error { closed++; return nil }, Compatibility{}) }
+	newLease := func() *Lease { return NewLease(s, func() error { closed++; return nil }, ExecutionConstraints{}) }
 	r := newLease()
 	if _, err := r.Read(ctx, workspace.ReadRequest{Path: "./a"}); err != nil {
 		t.Fatal(err)
@@ -52,13 +52,13 @@ func TestOperationsDefaultOnceAndCloseOriginalLease(t *testing.T) {
 	if err := r.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if s.read.Offset != 1 || s.read.Limit != 200 || s.read.Path != "./a" || closed != 1 {
+	if s.read.Path != "./a" || closed != 1 {
 		t.Fatalf("read=%+v closes=%d", s.read, closed)
 	}
 	if _, err := newLease().Search(ctx, workspace.SearchRequest{Mode: "files"}); err != nil {
 		t.Fatal(err)
 	}
-	if s.search.Path != "." || s.search.MaxResults != 100 {
+	if s.search.Mode != "files" {
 		t.Fatalf("search=%+v", s.search)
 	}
 	input := workspace.EditRequest{Path: "a", Operation: "replace", Edits: []workspace.TextEdit{{OldText: "a", NewText: "b"}}}
@@ -66,20 +66,20 @@ func TestOperationsDefaultOnceAndCloseOriginalLease(t *testing.T) {
 	if _, err := newLease().Edit(ctx, input); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(input.Edits, before) || s.edit.Edits[0].ExpectedReplacements != 1 {
-		t.Fatalf("edit mutated caller or missed default: %+v %+v", input, s.edit)
+	if !reflect.DeepEqual(input.Edits, before) {
+		t.Fatalf("edit mutated caller: %+v %+v", input, s.edit)
 	}
 	if _, err := newLease().Shell(ctx, workspace.ShellRequest{Command: "echo"}); err != nil {
 		t.Fatal(err)
 	}
-	if s.shell.Cwd != "." || s.shell.TimeoutMS != 30000 || closed != 4 || s.calls != 4 {
+	if s.shell.Command != "echo" || closed != 4 || s.calls != 4 {
 		t.Fatalf("shell=%+v closes=%d calls=%d", s.shell, closed, s.calls)
 	}
 }
 
 func TestExternalDefaultsAndExplicitValuesRemainUnchanged(t *testing.T) {
 	s := &sessionFixture{}
-	l := NewLease(s, func() error { return nil }, Compatibility{PreserveDefaults: true})
+	l := NewLease(s, func() error { return nil }, ExecutionConstraints{})
 	if _, err := l.Read(context.Background(), workspace.ReadRequest{Path: "a"}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestFailureAndCancellationAlwaysCloseWithoutRetry(t *testing.T) {
 		for _, cleanup := range []error{nil, closeErr} {
 			s := &sessionFixture{err: runErr}
 			closed := 0
-			l := NewLease(s, func() error { closed++; return cleanup }, Compatibility{})
+			l := NewLease(s, func() error { closed++; return cleanup }, ExecutionConstraints{})
 			_, err := l.Edit(context.Background(), workspace.EditRequest{Path: "a", Operation: "delete"})
 			if cleanup != nil {
 				var typed *CleanupError
@@ -124,17 +124,15 @@ func TestFailureAndCancellationAlwaysCloseWithoutRetry(t *testing.T) {
 }
 
 func TestAbortAndTransportArgumentLimits(t *testing.T) {
-	for _, expectedTool := range []bool{false, true} {
-		closed := 0
-		s := &sessionFixture{}
-		l := NewLease(s, func() error { closed++; return nil }, Compatibility{MaxArgumentBytes: 3, ArgumentLimitMessage: "limit", ArgumentLimitIsToolError: expectedTool})
-		if err := l.CheckArgumentSize(3); err != nil {
-			t.Fatal(err)
-		}
-		err := l.Abort(l.CheckArgumentSize(4))
-		var tool *workspace.ToolError
-		if err == nil || errors.As(err, &tool) != expectedTool || closed != 1 || s.calls != 0 {
-			t.Fatalf("limit classification or cleanup: %v %d %d", err, closed, s.calls)
-		}
+	closed := 0
+	s := &sessionFixture{}
+	l := NewLease(s, func() error { closed++; return nil }, ExecutionConstraints{MaxArgumentBytes: 3})
+	if err := l.CheckArgumentSize(3); err != nil {
+		t.Fatal(err)
+	}
+	err := l.Abort(l.CheckArgumentSize(4))
+	var tool *workspace.ToolError
+	if err == nil || !errors.As(err, &tool) || closed != 1 || s.calls != 0 {
+		t.Fatalf("limit classification or cleanup: %v %d %d", err, closed, s.calls)
 	}
 }

@@ -58,7 +58,7 @@ func TestTypedToolAdapterPreservesFailureClassesAndCleanupPriority(t *testing.T)
 		t.Run(test.name, func(t *testing.T) {
 			s := &typedSessionFixture{err: test.run}
 			closed := 0
-			l := workspaceapp.NewLease(s, func() error { closed++; return test.close }, workspaceapp.Compatibility{})
+			l := workspaceapp.NewLease(s, func() error { closed++; return test.close }, workspaceapp.ExecutionConstraints{})
 			args, err := invocation.NewJSONValue([]byte(`{"path":"a"}`))
 			if err != nil {
 				t.Fatal(err)
@@ -86,7 +86,7 @@ func TestTypedToolAdapterPreservesFailureClassesAndCleanupPriority(t *testing.T)
 				if out.FailureSource() != test.source || out.FailureCode() != test.code {
 					t.Fatalf("classification changed: %+v", out)
 				}
-			} else if out.Kind() != invocation.OutcomeKindComplete || s.read.Offset != 1 || s.read.Limit != 200 {
+			} else if out.Kind() != invocation.OutcomeKindComplete || s.read.Path != "a" {
 				t.Fatalf("success/defaults %+v %+v", out, s.read)
 			}
 		})
@@ -97,7 +97,7 @@ func TestTypedToolDecodeFailureAndCancellationReleaseWithoutExecuting(t *testing
 	for _, cancel := range []bool{false, true} {
 		s := &typedSessionFixture{}
 		closed := 0
-		l := workspaceapp.NewLease(s, func() error { closed++; return nil }, workspaceapp.Compatibility{})
+		l := workspaceapp.NewLease(s, func() error { closed++; return nil }, workspaceapp.ExecutionConstraints{})
 		args, err := invocation.NewJSONValue([]byte(`{"path":"a","unknown":1}`))
 		if err != nil {
 			t.Fatal(err)
@@ -130,7 +130,7 @@ func TestTypedAdapterPreservesExplicitOptionalValuesForV1(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			lease := workspaceapp.NewLease(s, func() error { return nil }, workspaceapp.Compatibility{PreserveDefaults: true})
+			lease := workspaceapp.NewLease(s, func() error { return nil }, workspaceapp.ExecutionConstraints{})
 			if _, err := executeTyped(context.Background(), lease, operation, args, 1000); err != nil {
 				t.Fatal(err)
 			}

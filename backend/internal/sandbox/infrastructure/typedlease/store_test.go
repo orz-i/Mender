@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,7 +71,11 @@ func atomicWorkspaceFixture(t *testing.T) *atomicFixture {
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(dbPath)}
+	slashed := filepath.ToSlash(dbPath)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	u := url.URL{Scheme: "file", Path: slashed}
 	q := u.Query()
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "busy_timeout(5000)")

@@ -17,6 +17,12 @@ func (s *workspaceSession) Read(ctx context.Context, input workspacedomain.ReadR
 	if err := s.validateWorkspaceSession(ctx); err != nil {
 		return workspacedomain.ReadResult{}, err
 	}
+	if input.Offset == 0 {
+		input.Offset = 1
+	}
+	if input.Limit == 0 {
+		input.Limit = 200
+	}
 	rel, err := relativePath(input.Path, false)
 	if err != nil {
 		return workspacedomain.ReadResult{}, dockerFailure(err)
@@ -93,6 +99,9 @@ func (s *workspaceSession) Edit(ctx context.Context, input workspacedomain.EditR
 		count := 0
 		for _, edit := range input.Edits {
 			wanted := edit.ExpectedReplacements
+			if wanted == 0 {
+				wanted = 1
+			}
 			if edit.OldText == "" || wanted < 1 || wanted > 1000 || strings.Count(working, edit.OldText) != wanted {
 				return workspacedomain.EditResult{}, dockerFailure(fmt.Errorf("edit replacement count mismatch"))
 			}
@@ -142,6 +151,12 @@ func (s *workspaceSession) Edit(ctx context.Context, input workspacedomain.EditR
 func (s *workspaceSession) Search(ctx context.Context, input workspacedomain.SearchRequest) (workspacedomain.SearchResult, error) {
 	if err := s.validateWorkspaceSession(ctx); err != nil {
 		return workspacedomain.SearchResult{}, err
+	}
+	if input.Path == "" {
+		input.Path = "."
+	}
+	if input.MaxResults == 0 {
+		input.MaxResults = 100
 	}
 	rel, err := relativePath(input.Path, true)
 	if err != nil {

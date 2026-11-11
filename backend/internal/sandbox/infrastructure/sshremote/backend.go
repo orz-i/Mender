@@ -153,6 +153,12 @@ func (s *Session) Read(ctx context.Context, in workspace.ReadRequest) (workspace
 		return workspace.ReadResult{}, err
 	}
 	defer stopCancel()
+	if in.Offset == 0 {
+		in.Offset = 1
+	}
+	if in.Limit == 0 {
+		in.Limit = 200
+	}
 	if in.Offset < 1 || in.Limit < 1 || in.Limit > 2000 {
 		return workspace.ReadResult{}, failure("read offset/limit out of bounds")
 	}
@@ -246,6 +252,9 @@ func (s *Session) Edit(ctx context.Context, in workspace.EditRequest) (workspace
 		working := string(original)
 		for _, ch := range in.Edits {
 			expected := ch.ExpectedReplacements
+			if expected == 0 {
+				expected = 1
+			}
 			if ch.OldText == "" || expected < 1 || expected > 1000 || strings.Count(working, ch.OldText) != expected {
 				return workspace.EditResult{}, failure("replacement text or expected count mismatch")
 			}
@@ -305,6 +314,12 @@ func (s *Session) Search(ctx context.Context, in workspace.SearchRequest) (works
 		return workspace.SearchResult{}, err
 	}
 	defer stopCancel()
+	if in.Path == "" {
+		in.Path = "."
+	}
+	if in.MaxResults == 0 {
+		in.MaxResults = 100
+	}
 	if in.MaxResults < 1 || in.MaxResults > 500 || len(in.Query) > 4096 || len(in.Pattern) > 1024 {
 		return workspace.SearchResult{}, failure("search limits exceeded")
 	}
@@ -474,6 +489,12 @@ func (s *Session) Shell(ctx context.Context, in workspace.ShellRequest) (workspa
 		return workspace.ShellResult{}, err
 	}
 	defer stopCancel()
+	if in.Cwd == "" {
+		in.Cwd = "."
+	}
+	if in.TimeoutMS == 0 {
+		in.TimeoutMS = 30000
+	}
 	if strings.TrimSpace(in.Command) == "" || len(in.Command) > 64*1024 {
 		return workspace.ShellResult{}, failure("shell command missing or too large")
 	}

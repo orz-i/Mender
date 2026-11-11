@@ -30,6 +30,12 @@ func (i *Instance) Search(
 	if err := i.ready(ctx); err != nil {
 		return workspace.SearchResult{}, err
 	}
+	if input.Path == "" {
+		input.Path = "."
+	}
+	if input.MaxResults == 0 {
+		input.MaxResults = 100
+	}
 	if input.MaxResults < 1 || input.MaxResults > maxSearchResults {
 		return workspace.SearchResult{}, toolFailure(fmt.Errorf("maxResults must be between 1 and %d", maxSearchResults))
 	}

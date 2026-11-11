@@ -12,15 +12,15 @@ import (
 // Lease retains the admitted backend's cleanup authority. Close failure is
 // never downgraded into a Tool failure or a successful operation.
 type Lease struct {
-	session       Session
-	closeBackend  func() error
-	compatibility Compatibility
-	once          sync.Once
-	closeErr      error
+	session      Session
+	closeBackend func() error
+	constraints  ExecutionConstraints
+	once         sync.Once
+	closeErr     error
 }
 
-func NewLease(session Session, closeBackend func() error, compatibility Compatibility) *Lease {
-	return &Lease{session: session, closeBackend: closeBackend, compatibility: compatibility}
+func NewLease(session Session, closeBackend func() error, constraints ExecutionConstraints) *Lease {
+	return &Lease{session: session, closeBackend: closeBackend, constraints: constraints}
 }
 func (l *Lease) Close() error {
 	if l == nil || l.closeBackend == nil {
@@ -49,39 +49,24 @@ func finish[T any](l *Lease, result T, runErr error) (T, error) {
 }
 func (l *Lease) Abort(err error) error { _, result := finish(l, struct{}{}, err); return result }
 func (l *Lease) CheckArgumentSize(size int) error {
-	if l.compatibility.MaxArgumentBytes == 0 || size <= l.compatibility.MaxArgumentBytes {
+	if l.constraints.MaxArgumentBytes == 0 || size <= l.constraints.MaxArgumentBytes {
 		return nil
 	}
-	if l.compatibility.ArgumentLimitIsToolError {
-		return &workspace.ToolError{Message: l.compatibility.ArgumentLimitMessage}
-	}
-	return errors.New(l.compatibility.ArgumentLimitMessage)
+	return &workspace.ToolError{Message: fmt.Sprintf("workspace arguments exceed limit of %d bytes", l.constraints.MaxArgumentBytes)}
 }
 func (l *Lease) Read(ctx context.Context, in workspace.ReadRequest) (workspace.ReadResult, error) {
-	if !l.compatibility.PreserveDefaults {
-		in = NormalizeRead(in)
-	}
 	result, err := l.session.Read(ctx, in)
 	return finish(l, result, err)
 }
 func (l *Lease) Search(ctx context.Context, in workspace.SearchRequest) (workspace.SearchResult, error) {
-	if !l.compatibility.PreserveDefaults {
-		in = NormalizeSearch(in)
-	}
 	result, err := l.session.Search(ctx, in)
 	return finish(l, result, err)
 }
 func (l *Lease) Edit(ctx context.Context, in workspace.EditRequest) (workspace.EditResult, error) {
-	if !l.compatibility.PreserveDefaults {
-		in = NormalizeEdit(in)
-	}
 	result, err := l.session.Edit(ctx, in)
 	return finish(l, result, err)
 }
 func (l *Lease) Shell(ctx context.Context, in workspace.ShellRequest) (workspace.ShellResult, error) {
-	if !l.compatibility.PreserveDefaults {
-		in = NormalizeShell(in)
-	}
 	result, err := l.session.Shell(ctx, in)
 	return finish(l, result, err)
 }

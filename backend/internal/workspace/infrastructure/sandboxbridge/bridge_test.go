@@ -77,7 +77,7 @@ func TestTypedBridgePinsTargetCapabilityAndOriginalCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := l.Read(context.Background(), workspace.ReadRequest{Path: "a"})
-	if err != nil || out.Path != "a" || s.read.Offset != 1 || *closed != 1 || r.id.String() != target || r.capability != sandbox.CapabilityRead {
+	if err != nil || out.Path != "a" || s.read.Path != "a" || *closed != 1 || r.id.String() != target || r.capability != sandbox.CapabilityRead {
 		t.Fatalf("routing or lifetime: %+v %v %+v %d", out, err, r, *closed)
 	}
 }

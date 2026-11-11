@@ -56,7 +56,7 @@ func TestNativeWorkspaceStripsOnlyRoutingFieldAndRetainsOriginalArgumentLimits(t
 	}
 	session := &typedSessionFixture{}
 	closed := 0
-	lease := workspaceapp.NewLease(session, func() error { closed++; return nil }, workspaceapp.Compatibility{})
+	lease := workspaceapp.NewLease(session, func() error { closed++; return nil }, workspaceapp.ExecutionConstraints{})
 	result, err := executeTypedWithArgumentSize(context.Background(), lease, workspace.Read, stripped, 4096, len(original.Bytes()))
 	if err != nil || result.Kind() != invocation.OutcomeKindComplete || session.calls != 1 || closed != 1 {
 		t.Fatalf("native Workspace adapter lost operation/cleanup: result=%+v err=%v calls=%d close=%d", result, err, session.calls, closed)
@@ -69,10 +69,8 @@ func TestNativeWorkspaceStripsOnlyRoutingFieldAndRetainsOriginalArgumentLimits(t
 	// not the shorter payload after an optional Workspace selector was removed.
 	session = &typedSessionFixture{}
 	closed = 0
-	lease = workspaceapp.NewLease(session, func() error { closed++; return nil }, workspaceapp.Compatibility{
-		MaxArgumentBytes:         len(stripped.Bytes()),
-		ArgumentLimitMessage:     "oversize original invocation",
-		ArgumentLimitIsToolError: true,
+	lease = workspaceapp.NewLease(session, func() error { closed++; return nil }, workspaceapp.ExecutionConstraints{
+		MaxArgumentBytes: len(stripped.Bytes()),
 	})
 	result, err = executeTypedWithArgumentSize(context.Background(), lease, workspace.Read, stripped, 4096, len(original.Bytes()))
 	if err != nil || result.FailureCode() != invocation.FailureToolError || session.calls != 0 || closed != 1 {

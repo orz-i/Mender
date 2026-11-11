@@ -41,6 +41,12 @@ func (i *Instance) Shell(
 	if err := i.ready(ctx); err != nil {
 		return workspace.ShellResult{}, err
 	}
+	if input.Cwd == "" {
+		input.Cwd = "."
+	}
+	if input.TimeoutMS == 0 {
+		input.TimeoutMS = 30000
+	}
 	if strings.TrimSpace(input.Command) == "" {
 		return workspace.ShellResult{}, toolFailure(fmt.Errorf("command must not be empty"))
 	}

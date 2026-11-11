@@ -22,6 +22,12 @@ func (i *Instance) Read(
 	if err := i.ready(ctx); err != nil {
 		return workspace.ReadResult{}, err
 	}
+	if input.Offset == 0 {
+		input.Offset = 1
+	}
+	if input.Limit == 0 {
+		input.Limit = 200
+	}
 	if input.Offset < 1 {
 		return workspace.ReadResult{}, toolFailure(fmt.Errorf("offset must be at least 1"))
 	}

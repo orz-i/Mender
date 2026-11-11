@@ -50,18 +50,12 @@ func wrapWorkspaceLease(lease *sandboxapp.Lease, placement sandboxapp.Placement)
 	if !ok {
 		return nil, errors.Join(sandbox.ErrCapabilityUnavailable, lease.Close())
 	}
-	compatibility := workspaceapp.Compatibility{}
+	constraints := workspaceapp.ExecutionConstraints{}
 	switch placement.Sandbox.Backend() {
-	case sandbox.BackendSSHRemote:
-		compatibility.MaxArgumentBytes = 1 << 20
-		compatibility.ArgumentLimitMessage = "SSH workspace arguments exceed limit"
-		compatibility.ArgumentLimitIsToolError = true
-	case sandbox.BackendExternal:
-		compatibility.PreserveDefaults = true
-		compatibility.MaxArgumentBytes = 1 << 20
-		compatibility.ArgumentLimitMessage = "sandbox plugin arguments exceed limit"
+	case sandbox.BackendSSHRemote, sandbox.BackendExternal:
+		constraints.MaxArgumentBytes = 1 << 20
 	}
-	return workspaceapp.NewLease(session, lease.Close, compatibility), nil
+	return workspaceapp.NewLease(session, lease.Close, constraints), nil
 }
 
 var _ workspaceapp.LeaseProvider = Provider{}

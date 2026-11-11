@@ -140,6 +140,12 @@ func (s *workspaceSession) Shell(ctx context.Context, input workspacedomain.Shel
 	if err := s.validateWorkspaceSession(ctx); err != nil {
 		return workspacedomain.ShellResult{}, err
 	}
+	if input.Cwd == "" {
+		input.Cwd = "."
+	}
+	if input.TimeoutMS == 0 {
+		input.TimeoutMS = 30000
+	}
 	if strings.TrimSpace(input.Command) == "" || len(input.Command) > maxDockerCommandBytes {
 		return workspacedomain.ShellResult{}, dockerFailure(fmt.Errorf("shell command must be nonempty and at most %d bytes", maxDockerCommandBytes))
 	}
