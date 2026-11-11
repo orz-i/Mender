@@ -16,8 +16,7 @@ import (
 // OwnedExecutor exposes a configured Agent directly as an Agent-owned Tool
 // source, without creating an internal Provider. It delegates to the already
 // audited Instance.Execute Task operations, so Task/Session/ACP/unknown/resume
-// have exactly one business implementation. F4 must remove the old Provider
-// Plugin registration when the atomic Catalog/runtime cut is activated.
+// have exactly one business implementation.
 type OwnedExecutor struct {
 	service *agentapp.Service
 	agentID agent.ID

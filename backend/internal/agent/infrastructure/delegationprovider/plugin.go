@@ -339,8 +339,7 @@ var _ providerplugin.Instance = (*Instance)(nil)
 var _ providerplugin.GovernanceFactProvider = (*Plugin)(nil)
 
 // The trusted Agent resource, not a Provider facade, owns the same reviewed
-// Policy facts for each of its delegate/task-control operations. This is
-// shared until F4 retires the Provider-facing Plugin transport.
+// Policy facts for each of its delegate/task-control operations.
 func reviewedAgentToolFacts(agentID string, sourceKey string) (invocationdomain.GovernanceFacts, error) {
 	switch sourceKey {
 	case sourceDelegate, sourceStatus, sourceResult, sourceCancel, sourceResume:

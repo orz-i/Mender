@@ -8,8 +8,7 @@ import (
 )
 
 // OpenTyped reuses the existing configured Provider/credential-reference
-// repository on a verified v3 schema. No old Provider-v2 migration or plugin
-// activation is performed. The F4 Runtime owns connection/activation order.
+// repository on a verified v3 schema.
 func OpenTyped(ctx context.Context, path string) (*Store, error) {
 	db, err := v3schema.OpenContextStore(ctx, path)
 	if err != nil {
