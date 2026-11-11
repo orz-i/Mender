@@ -173,3 +173,15 @@ func TestPinnedV3InitializationNeverRewritesAnExistingDatabase(t *testing.T) {
 		t.Fatalf("pinned v3 native Tool contracts=%d, want 9", count)
 	}
 }
+
+func TestOpenContextStoreRejectsUNCPath(t *testing.T) {
+	for _, unc := range []string{
+		`\\server\share\test.db`,
+		`//server/share/test.db`,
+	} {
+		_, err := OpenContextStore(context.Background(), unc)
+		if err == nil || !strings.Contains(err.Error(), "UNC database path not supported") {
+			t.Fatalf("expected UNC rejection for %q, got: %v", unc, err)
+		}
+	}
+}

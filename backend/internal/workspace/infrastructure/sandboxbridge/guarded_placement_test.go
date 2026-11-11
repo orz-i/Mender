@@ -620,6 +620,10 @@ func TestGuardedWorkspacePathFactIsHostNormalizedAndFrozen(t *testing.T) {
 func TestGuardedWorkspaceInvalidPathNeverReachesApprovalOrBackend(t *testing.T) {
 	for _, raw := range []string{
 		`{"path":"../private.txt"}`, `{"path":"/etc/passwd"}`,
+		`{"path":"\\Windows"}`, `{"path":"foo\\bar"}`,
+		`{"path":"C:foo"}`, `{"path":"C:\\Users"}`,
+		`{"path":"report.txt:secret"}`, `{"path":"foo\u0000bar"}`,
+		`{"path":"//server/share"}`,
 		`{"path":"README.md","workspaceId":"wrk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 		`{"path":123}`, `{"path":""}`, `{"path":" README.md"}`,
 		`{"path":"README.md"}{"path":"another"}`,

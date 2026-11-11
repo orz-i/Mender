@@ -17,12 +17,20 @@ import (
 // This preflight only verifies schema shape. It is NOT the owner-reviewed
 // backup/cutover attestation from a backup or a grant to invoke.
 func OpenContextStore(ctx context.Context, path string) (*sql.DB, error) {
-	if strings.TrimSpace(path) == "" {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
 		return nil, fmt.Errorf("typed context store: database path required")
 	}
-	absolute, err := filepath.Abs(path)
+	if strings.HasPrefix(trimmed, `\\`) || strings.HasPrefix(trimmed, "//") {
+		return nil, fmt.Errorf("typed context store: UNC database path not supported: %s", trimmed)
+	}
+	absolute, err := filepath.Abs(trimmed)
 	if err != nil {
 		return nil, err
+	}
+	slashed := filepath.ToSlash(absolute)
+	if strings.HasPrefix(slashed, "//") || strings.HasPrefix(absolute, `\\`) {
+		return nil, fmt.Errorf("typed context store: UNC database path not supported: %s", absolute)
 	}
 	info, err := os.Lstat(absolute)
 	if err != nil {
@@ -31,7 +39,10 @@ func OpenContextStore(ctx context.Context, path string) (*sql.DB, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("typed context store: existing regular database required")
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	u := url.URL{Scheme: "file", Path: slashed}
 	q := u.Query()
 	q.Set("mode", "rw") // Do not create/repair a DB during preflight.
 	q.Add("_pragma", "foreign_keys(1)")

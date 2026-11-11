@@ -67,12 +67,20 @@ type Reader struct{ db *sql.DB }
 // It does not create a file, run migrations, activate Providers or Agents,
 // connect Sandboxes, or mutate a Profile or its grants.
 func Open(ctx context.Context, path string) (*Reader, error) {
-	if strings.TrimSpace(path) == "" {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
 		return nil, ErrTypedSchemaRequired
 	}
-	absolute, err := filepath.Abs(path)
+	if strings.HasPrefix(trimmed, `\\`) || strings.HasPrefix(trimmed, "//") {
+		return nil, fmt.Errorf("%w: UNC database path not supported: %s", ErrTypedSchemaRequired, trimmed)
+	}
+	absolute, err := filepath.Abs(trimmed)
 	if err != nil {
 		return nil, err
+	}
+	slashed := filepath.ToSlash(absolute)
+	if strings.HasPrefix(slashed, "//") || strings.HasPrefix(absolute, `\\`) {
+		return nil, fmt.Errorf("%w: UNC database path not supported: %s", ErrTypedSchemaRequired, absolute)
 	}
 	st, err := os.Lstat(absolute)
 	if err != nil {
@@ -81,7 +89,10 @@ func Open(ctx context.Context, path string) (*Reader, error) {
 	if !st.Mode().IsRegular() {
 		return nil, ErrTypedSchemaRequired
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	u := url.URL{Scheme: "file", Path: slashed}
 	q := u.Query()
 	q.Set("mode", "ro")
 	q.Add("_pragma", "query_only(1)")
