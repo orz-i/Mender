@@ -168,6 +168,10 @@ export async function getDesktopProfileCLI(slug: string): Promise<ProfileCLIInst
   };
 }
 
+export async function revealDesktopPath(targetPath: string): Promise<void> {
+  await Service.RevealPath(targetPath);
+}
+
 export function createDesktopMenderClient(): ManagementClient {
   return {
     async getSystemStatus() {

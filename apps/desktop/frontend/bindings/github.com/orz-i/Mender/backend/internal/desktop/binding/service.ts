@@ -539,6 +539,13 @@ export function RestartMCPServer(serverID: string): $CancellablePromise<$models.
     return $Call.ByID(2194966826, serverID);
 }
 
+/**
+ * RevealPath opens the operating system file manager focused on targetPath.
+ */
+export function RevealPath(targetPath: string): $CancellablePromise<void> {
+    return $Call.ByID(1526939490, targetPath);
+}
+
 export function RevokeAgentProfile(agentID: string, profileID: string): $CancellablePromise<void> {
     return $Call.ByID(151299120, agentID, profileID);
 }

@@ -1,4 +1,6 @@
-export function SandboxMetadata({ name, value }: { name: string; value: string }) {
+import type { ReactNode } from "react";
+
+export function SandboxMetadata({ name, value }: { name: string; value: ReactNode }) {
   return (
     <div className="min-w-0 border-b border-border/70 pb-3">
       <dt className="text-xs font-medium text-muted-foreground">{name}</dt>

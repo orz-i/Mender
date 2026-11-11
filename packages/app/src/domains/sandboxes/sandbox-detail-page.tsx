@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIcon, ShieldCheckIcon } from "lucide-react";
+import { ActivityIcon, FolderOpenIcon, ShieldCheckIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { usePageHeading } from "../../shell/page-chrome";
 
@@ -16,6 +16,7 @@ import {
 } from "@mender/ui/components/dialog";
 
 import { t } from "../../i18n/i18n";
+import { useDesktopHost } from "../../shell/desktop-host-context";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
@@ -32,6 +33,7 @@ type LifecycleAction = "start" | "stop" | "destroy";
 export function SandboxDetailPage({ client }: { client: ManagementClient }) {
   const { sandboxId } = useParams();
   const navigate = useNavigate();
+  const { revealLocalPath } = useDesktopHost();
   const [item, setItem] = useState<Sandbox | null>(null);
   usePageHeading(item?.name);
   const [error, setError] = useState("");
@@ -164,7 +166,29 @@ export function SandboxDetailPage({ client }: { client: ManagementClient }) {
                   <SandboxMetadata name={t("Backend")} value={sandboxBackend(item)} />
                   <SandboxMetadata name={t("Isolation")} value={isolationLabel(item.isolation)} />
                   <SandboxMetadata name={t("State")} value={sandboxStateLabel(item.state)} />
-                  <SandboxMetadata name={t("Workspace")} value={item.localRoot || "—"} />
+                  <SandboxMetadata
+                    name={t("Workspace")}
+                    value={
+                      item.localRoot ? (
+                        <span className="flex items-center gap-2">
+                          <span className="truncate">{item.localRoot}</span>
+                          {revealLocalPath ? (
+                            <button
+                              type="button"
+                              className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                              title={t("Reveal in File Manager")}
+                              aria-label={t("Reveal in File Manager")}
+                              onClick={() => void revealLocalPath(item.localRoot)}
+                            >
+                              <FolderOpenIcon className="size-3" aria-hidden="true" />
+                            </button>
+                          ) : null}
+                        </span>
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
                   <SandboxMetadata name={t("Owner type")} value={item.ownerKind} />
                   <SandboxMetadata name={t("Active execution leases")} value={String(item.activeLeases)} />
                   <SandboxMetadata name={t("Backend status")} value={t(item.backendAvailable ? "Available" : "Unavailable")} />

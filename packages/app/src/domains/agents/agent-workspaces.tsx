@@ -1,10 +1,12 @@
 import {useEffect,useState} from "react";
+import {FolderOpenIcon} from "lucide-react";
 import {MenderApiError} from "@mender/sdk";
 import type {Agent,AgentWorkspace,ManagementClient,Profile} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Input} from "@mender/ui/components/input";
 import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
 import {t} from "../../i18n/i18n";
+import {useDesktopHost} from "../../shell/desktop-host-context";
 import {errorMessage} from "../../shared/errors";
 import {ErrorNotice,EmptyState} from "../../shared/page";
 import {ResultPanel} from "../../shared/page-toolbar";
@@ -39,6 +41,7 @@ function registrationErrorMessage(reason:unknown):string{
 export function AgentWorkspaceSettings({
  client,agent,chooseLocalDirectory,
 }:{client:ManagementClient;agent:Agent;chooseLocalDirectory?:()=>Promise<string|null>}){
+ const { revealLocalPath } = useDesktopHost();
  const [items,setItems]=useState<AgentWorkspace[]>([]);
  const [profiles,setProfiles]=useState<Profile[]>([]);
  const [action,setAction]=useState<Action>(null);
@@ -107,12 +110,38 @@ export function AgentWorkspaceSettings({
    <div className="divide-y divide-border">
     <div className="flex flex-wrap items-center justify-between gap-2 p-4">
      <div><div className="font-medium">{t("Default workspace")}</div>
-      <div className="break-all text-xs text-muted-foreground">{agent.workspaceRoot}</div></div>
+      <div className="flex items-center gap-2">
+       <span className="break-all text-xs text-muted-foreground">{agent.workspaceRoot}</span>
+       {revealLocalPath ? (
+         <button
+           type="button"
+           className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+           title={t("Reveal in File Manager")}
+           aria-label={t("Reveal in File Manager")}
+           onClick={() => void revealLocalPath(agent.workspaceRoot)}
+         >
+           <FolderOpenIcon className="size-3" aria-hidden="true" />
+         </button>
+       ) : null}
+      </div></div>
     </div>
     {items.map(w=><div key={w.key} className="space-y-3 p-4">
      <div className="flex flex-wrap items-center justify-between gap-2">
       <div><div className="font-medium">{w.key}</div>
-       <div className="break-all text-xs text-muted-foreground">{w.workspaceRoot}</div></div>
+       <div className="flex items-center gap-2">
+        <span className="break-all text-xs text-muted-foreground">{w.workspaceRoot}</span>
+        {revealLocalPath ? (
+          <button
+            type="button"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title={t("Reveal in File Manager")}
+            aria-label={t("Reveal in File Manager")}
+            onClick={() => void revealLocalPath(w.workspaceRoot)}
+          >
+            <FolderOpenIcon className="size-3" aria-hidden="true" />
+          </button>
+        ) : null}
+       </div></div>
       <div className="flex flex-wrap gap-2">
        <Button size="sm" variant="outline" disabled={profiles.every(p=>w.profileIds.includes(p.profileId))} onClick={()=>openGrant(w.key)}>{t("Grant Profile")}</Button>
        <Button size="sm" variant="outline" onClick={()=>setAction({kind:"remove",key:w.key})}>{t("Remove")}</Button>

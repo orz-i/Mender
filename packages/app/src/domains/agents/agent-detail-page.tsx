@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FolderOpenIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
 import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, LocalOwnerCapabilities, ManagementClient, Profile } from "@mender/sdk";
@@ -9,6 +10,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
 import { formatDateTime, t } from "../../i18n/i18n";
+import { useDesktopHost } from "../../shell/desktop-host-context";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, EmptyState } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -103,6 +105,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
   const {agentId}=useParams();
   const navigate=useNavigate();
   const location=useLocation();
+  const { revealLocalPath } = useDesktopHost();
   const [agent,setAgent]=useState<Agent|null>(null);
   usePageHeading(agent?.name);
   const [tasks,setTasks]=useState<AgentTask[]>([]);
@@ -254,7 +257,20 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         <div><dt className="text-xs text-muted-foreground">{t("Default reasoning effort")}</dt>
           <dd className="mt-1 text-sm">{agent.defaultReasoningEffort||t("Use Agent default")}</dd></div>
         <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">{t("Workspace directory")}</dt>
-          <dd className="mt-1 break-all font-mono text-xs">{agent.workspaceRoot}</dd></div>
+          <dd className="mt-1 flex items-center gap-2">
+            <span className="break-all font-mono text-xs">{agent.workspaceRoot}</span>
+            {revealLocalPath ? (
+              <button
+                type="button"
+                className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                title={t("Reveal in File Manager")}
+                aria-label={t("Reveal in File Manager")}
+                onClick={() => void revealLocalPath(agent.workspaceRoot)}
+              >
+                <FolderOpenIcon className="size-3" aria-hidden="true" />
+              </button>
+            ) : null}
+          </dd></div>
         {agent.backend==="antigravity"?<div className="sm:col-span-2 text-xs text-muted-foreground">{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</div>:null}
         <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
         {agent.issue?<div className="sm:col-span-2 text-sm text-destructive">{agent.issue}</div>:null}

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { BoxIcon } from "lucide-react";
+import { BoxIcon, FolderOpenIcon } from "lucide-react";
 
 import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 
 import { t } from "../../i18n/i18n";
+import { useDesktopHost } from "../../shell/desktop-host-context";
 import { errorMessage } from "../../shared/errors";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -21,6 +22,7 @@ export { SandboxDetailPage } from "./sandbox-detail-page";
 
 export function SandboxesPage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
+  const { revealLocalPath } = useDesktopHost();
   const [items, setItems] = useState<Sandbox[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
@@ -105,8 +107,25 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
                   title={item.name}
                   description={<>{sandboxBackend(item)} <span aria-hidden="true">·</span> {isolationLabel(item.isolation)}</>}
                   detail={item.localRoot ? (
-                    <span className="block max-w-64 truncate font-mono text-[11px]" title={item.localRoot}>
-                      {item.localRoot}
+                    <span className="inline-flex items-center gap-1.5 max-w-72">
+                      <span className="truncate font-mono text-[11px]" title={item.localRoot}>
+                        {item.localRoot}
+                      </span>
+                      {revealLocalPath ? (
+                        <button
+                          type="button"
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                          title={t("Reveal in File Manager")}
+                          aria-label={t("Reveal in File Manager")}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void revealLocalPath(item.localRoot);
+                          }}
+                        >
+                          <FolderOpenIcon className="size-3" aria-hidden="true" />
+                        </button>
+                      ) : null}
                     </span>
                   ) : undefined}
                   status={<StatusInline status={status}>

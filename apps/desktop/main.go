@@ -18,6 +18,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -88,8 +91,40 @@ func run() error {
 		MinWidth:  960,
 		MinHeight: 640,
 		URL:       startupURL,
+		Windows: application.WindowsWindow{
+			NonClientRegionSupport: true,
+		},
+		Mac: application.MacWindow{
+			TitleBar: application.MacTitleBar{
+				FullSizeContent: true,
+			},
+		},
 	})
 	window.Center()
+
+	tray := app.SystemTray.New()
+	if len(appIcon) > 0 {
+		tray.SetIcon(appIcon)
+	}
+	tray.SetTooltip(windowTitle)
+	trayMenu := app.NewMenu()
+	trayMenu.Add("Show Mender").OnClick(func(ctx *application.Context) {
+		window.Show()
+		window.Focus()
+	})
+	trayMenu.AddSeparator()
+	trayMenu.Add("Quit").OnClick(func(ctx *application.Context) {
+		app.Quit()
+	})
+	tray.SetMenu(trayMenu)
+	tray.OnClick(func() {
+		if window.IsVisible() {
+			window.Focus()
+		} else {
+			window.Show()
+			window.Focus()
+		}
+	})
 
 	if err := app.Run(); err != nil {
 		return fmt.Errorf("run desktop application: %w", err)

@@ -63,6 +63,7 @@ vi.mock(
       ReplaceProfileSkills: vi.fn(),
       RestartMCPServer: vi.fn(),
       RotateNativeCredential: vi.fn(),
+      RevealPath: vi.fn(),
       SearchTools: vi.fn(),
       SetPolicyDefault: vi.fn(),
       SetPolicyRuleEnabled: vi.fn(),
@@ -90,6 +91,7 @@ import {
   installDesktopProviderPlugin,
   installDesktopPlugin,
   installDesktopSkill,
+  revealDesktopPath,
 } from "./desktop-client";
 import { createDesktopLocalOwnerCapabilities } from "./desktop-local-owner";
 
@@ -1490,5 +1492,11 @@ describe("desktop Mender client", () => {
     await expect(request).rejects.toThrow(
       "Unsupported desktop provider transport",
     );
+  });
+
+  it("delegates revealDesktopPath to Service.RevealPath", async () => {
+    vi.mocked(Service.RevealPath).mockResolvedValue();
+    await expect(revealDesktopPath("/path/to/reveal")).resolves.toBeUndefined();
+    expect(Service.RevealPath).toHaveBeenCalledWith("/path/to/reveal");
   });
 });
