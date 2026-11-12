@@ -50,10 +50,18 @@ type AgentTaskObservation struct {
 	SessionRecoverability string `json:"sessionRecoverability"`
 	LeaderReaped          bool   `json:"leaderReaped"`
 }
+type SubmitTaskOptions struct {
+	Title           string `json:"title,omitempty"`
+	Model           string `json:"model,omitempty"`
+	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	Workspace       string `json:"workspace,omitempty"`
+	TimeoutMinutes  int    `json:"timeoutMinutes,omitempty"`
+}
 type AgentTask struct {
 	TaskID              string                `json:"taskId"`
 	AgentID             string                `json:"agentId"`
 	Status              string                `json:"status"`
+	Title               string                `json:"title,omitempty"`
 	Model               string                `json:"model,omitempty"`
 	ReasoningEffort     string                `json:"reasoningEffort,omitempty"`
 	TimeoutSeconds      int                   `json:"timeoutSeconds"`
@@ -131,7 +139,7 @@ func (s *Service) projectAgent(a agentdomain.Agent) Agent {
 	return out
 }
 func projectTask(t agentdomain.Task) AgentTask {
-	out := AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Model: t.Model, ReasoningEffort: t.ReasoningEffort, TimeoutSeconds: int(t.ExecutionTimeout() / time.Second), Workspace: t.WorkspaceKey,
+	out := AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Title: t.Title, Model: t.Model, ReasoningEffort: t.ReasoningEffort, TimeoutSeconds: int(t.ExecutionTimeout() / time.Second), Workspace: t.WorkspaceKey,
 		Result: t.Result, Diagnostic: t.Diagnostic, CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: t.UpdatedAt.UTC().Format(time.RFC3339Nano), CancelRequested: t.CancelRequested}
 	if t.ContinuedFromTaskID != "" {
@@ -282,6 +290,48 @@ func (s *Service) ListAgentAdmissions(id string) (AgentAdmissionList, error) {
 		})
 	}
 	return out, nil
+}
+
+func (s *Service) SubmitAgentTask(agentId, prompt string, options SubmitTaskOptions) (AgentTask, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentTask{}, err
+	}
+	parsed, err := agentdomain.ParseID(agentId)
+	if err != nil {
+		return AgentTask{}, err
+	}
+	task, err := s.runtime.Agents.SubmitWithOptions(s.ctx, parsed, prompt, agentapplication.SubmitOptions{
+		Title:           options.Title,
+		Model:           options.Model,
+		ReasoningEffort: options.ReasoningEffort,
+		Workspace:       options.Workspace,
+		TimeoutMinutes:  options.TimeoutMinutes,
+	}, caller)
+	if err != nil {
+		return AgentTask{}, err
+	}
+	return projectTask(task), nil
+}
+
+func (s *Service) ResumeAgentTask(taskId, prompt string) (AgentTask, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentTask{}, err
+	}
+	parsedTaskID, err := agentdomain.ParseTaskID(taskId)
+	if err != nil {
+		return AgentTask{}, err
+	}
+	parent, err := s.runtime.Agents.Task(s.ctx, parsedTaskID, caller)
+	if err != nil {
+		return AgentTask{}, err
+	}
+	task, err := s.runtime.Agents.Resume(s.ctx, parsedTaskID, prompt, parent.AgentID, caller)
+	if err != nil {
+		return AgentTask{}, err
+	}
+	return projectTask(task), nil
 }
 
 func (s *Service) GetAgentTask(id string) (AgentTask, error) {

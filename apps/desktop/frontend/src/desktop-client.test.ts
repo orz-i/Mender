@@ -34,6 +34,8 @@ vi.mock(
       GetSystemStatus: vi.fn(),
       GetAgentTask: vi.fn(),
       GetAgentTaskTranscript: vi.fn(),
+      SubmitAgentTask: vi.fn(),
+      ResumeAgentTask: vi.fn(),
       ListAgentTasks: vi.fn(),
       ListPendingAgentApprovals: vi.fn(),
       DecideAgentApproval: vi.fn(),
@@ -211,6 +213,49 @@ describe("desktop Mender client", () => {
     expect(received).toHaveLength(1);
     expect(received[0]?.eventId).toBe("evt_1");
     expect(received[0]?.type).toBe("user_prompt");
+  });
+
+  it("submits an Agent task via desktop client Service binding", async () => {
+    const client = createDesktopMenderClient();
+    vi.mocked(Service.SubmitAgentTask).mockResolvedValue({
+      taskId: "atask_desk_01",
+      agentId: "agent_01",
+      status: "queued",
+      timeoutSeconds: 600,
+      createdAt: "2026-11-12T10:00:00Z",
+      updatedAt: "2026-11-12T10:00:00Z",
+      cancelRequested: false,
+    });
+    const result = await client.submitAgentTask("agent_01", "Desktop task prompt", {
+      title: "My Desktop Task",
+      model: "claude-3-5-sonnet",
+      timeoutMinutes: 10,
+    });
+    expect(Service.SubmitAgentTask).toHaveBeenCalledWith("agent_01", "Desktop task prompt", {
+      title: "My Desktop Task",
+      model: "claude-3-5-sonnet",
+      timeoutMinutes: 10,
+    });
+    expect(result.taskId).toBe("atask_desk_01");
+    expect(result.status).toBe("queued");
+  });
+
+  it("resumes an Agent task session via desktop client Service binding", async () => {
+    const client = createDesktopMenderClient();
+    vi.mocked(Service.ResumeAgentTask).mockResolvedValue({
+      taskId: "atask_desk_02",
+      agentId: "agent_01",
+      status: "queued",
+      continuedFromTaskId: "atask_desk_01",
+      timeoutSeconds: 600,
+      createdAt: "2026-11-12T10:05:00Z",
+      updatedAt: "2026-11-12T10:05:00Z",
+      cancelRequested: false,
+    });
+    const result = await client.resumeAgentTask("atask_desk_01", "Continue the desktop task");
+    expect(Service.ResumeAgentTask).toHaveBeenCalledWith("atask_desk_01", "Continue the desktop task");
+    expect(result.taskId).toBe("atask_desk_02");
+    expect(result.continuedFromTaskId).toBe("atask_desk_01");
   });
 
   it("forwards SSH key import-only passphrases through Wails without persisting them in returned metadata", async () => {

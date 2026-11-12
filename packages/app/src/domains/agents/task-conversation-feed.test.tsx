@@ -480,4 +480,85 @@ describe("TaskConversationFeed", () => {
     expect(await screen.findByText("Approval rejected")).toBeTruthy();
     expect(onTaskUpdated).toHaveBeenCalled();
   });
+
+  it("renders follow-up reply bar for completed task and sends on Enter", async () => {
+    const client = {
+      getAgentTaskTranscript: vi.fn().mockResolvedValue({
+        events: [
+          {
+            eventId: "evt_1",
+            taskId: mockTask.taskId,
+            seq: 1,
+            type: "user_prompt",
+            payload: { prompt: "Initial prompt" },
+            createdAt: "2026-11-12T10:00:00Z",
+          },
+        ],
+      }),
+      resumeAgentTask: vi.fn().mockResolvedValue({
+        taskId: "atask_resumed_1",
+        agentId: mockTask.agentId,
+        status: "queued",
+        continuedFromTaskId: mockTask.taskId,
+        timeoutSeconds: 600,
+        createdAt: "2026-11-12T10:10:00Z",
+        updatedAt: "2026-11-12T10:10:00Z",
+        cancelRequested: false,
+      }),
+    };
+
+    const onTaskResumed = vi.fn();
+
+    render(
+      <TaskConversationFeed
+        task={mockTask}
+        client={client}
+        onTaskResumed={onTaskResumed}
+      />,
+    );
+
+    expect(await screen.findByText("Initial prompt")).toBeTruthy();
+    expect(screen.getByText("Continue session")).toBeTruthy();
+
+    const textarea = screen.getByPlaceholderText("Ask a follow-up or provide next instructions...");
+    expect(textarea).toBeTruthy();
+
+    fireEvent.change(textarea, { target: { value: "Follow-up question" } });
+
+    // Press Shift+Enter - should not submit
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(client.resumeAgentTask).not.toHaveBeenCalled();
+
+    // Press Enter - submits
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      expect(client.resumeAgentTask).toHaveBeenCalledWith(mockTask.taskId, "Follow-up question");
+      expect(onTaskResumed).toHaveBeenCalledWith(expect.objectContaining({ taskId: "atask_resumed_1" }));
+    });
+  });
+
+  it("submits follow-up via Send button and displays error on failure", async () => {
+    const client = {
+      getAgentTaskTranscript: vi.fn().mockResolvedValue({ events: [] }),
+      resumeAgentTask: vi.fn().mockRejectedValue(new Error("Continuation failed: session expired")),
+    };
+
+    render(
+      <TaskConversationFeed
+        task={mockTask}
+        client={client}
+      />,
+    );
+
+    expect(await screen.findByText("Continue session")).toBeTruthy();
+    const textarea = screen.getByPlaceholderText("Ask a follow-up or provide next instructions...");
+    fireEvent.change(textarea, { target: { value: "Retry something" } });
+
+    const sendBtn = screen.getByRole("button", { name: "Send" });
+    fireEvent.click(sendBtn);
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Continuation failed: session expired")).toBeTruthy();
+  });
 });

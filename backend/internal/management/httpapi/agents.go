@@ -20,6 +20,8 @@ func (h *Handler) agentError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusForbidden, "policy_denied", err)
 	case errors.Is(err, agentdomain.ErrNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
+	case errors.Is(err, agentdomain.ErrResumeUnavailable):
+		writeAPIError(w, http.StatusConflict, "resume_unavailable", err)
 	case errors.Is(err, agentdomain.ErrWorkspaceDefaultDirectory):
 		writeAPIError(w, http.StatusConflict, "agent_workspace_default_directory", err)
 	case errors.Is(err, agentdomain.ErrWorkspaceAliasExists):
@@ -174,6 +176,42 @@ func (h *Handler) listAgentTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tasks": items})
 }
+func (h *Handler) submitAgentTask(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseID(r.PathValue("agentId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	var req struct {
+		Prompt          string `json:"prompt"`
+		Title           string `json:"title,omitempty"`
+		Model           string `json:"model,omitempty"`
+		ReasoningEffort string `json:"reasoningEffort,omitempty"`
+		Workspace       string `json:"workspace,omitempty"`
+		TimeoutMinutes  int    `json:"timeoutMinutes,omitempty"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	task, err := h.runtime.Agents.SubmitWithOptions(r.Context(), id, req.Prompt, agentapplication.SubmitOptions{
+		Title:           req.Title,
+		Model:           req.Model,
+		ReasoningEffort: req.ReasoningEffort,
+		Workspace:       req.Workspace,
+		TimeoutMinutes:  req.TimeoutMinutes,
+	}, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, task)
+}
 func (h *Handler) getAgentTask(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseTaskID(r.PathValue("taskId"))
 	if err != nil {
@@ -307,6 +345,36 @@ func (h *Handler) cancelAgentTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"taskId": id, "cancelRequested": true})
+}
+func (h *Handler) resumeAgentTask(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseTaskID(r.PathValue("taskId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	var req struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	parent, err := h.runtime.Agents.Task(r.Context(), id, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	task, err := h.runtime.Agents.Resume(r.Context(), id, req.Prompt, parent.AgentID, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, task)
 }
 func (h *Handler) listAgentAdmissions(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseID(r.PathValue("agentId"))

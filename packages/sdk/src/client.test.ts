@@ -782,4 +782,90 @@ describe("Mender SDK", () => {
       globalThis.EventSource = originalEventSource;
     }
   });
+
+  it("submits a new Agent task with options via HTTP client", async () => {
+    let call = 0;
+    const fetch: (req: Request) => Promise<Response> = async (req) => {
+      call++;
+      expect(req.url).toBe("http://localhost:8080/api/v1/agents/agent_001/tasks");
+      expect(req.method).toBe("POST");
+      const body = await req.json();
+      expect(body).toEqual({
+        prompt: "Build feature X",
+        title: "Feature X",
+        model: "test-model",
+        reasoningEffort: "high",
+        workspace: "default",
+        timeoutMinutes: 20,
+      });
+      return new Response(
+        JSON.stringify({
+          taskId: "atask_002",
+          agentId: "agent_001",
+          status: "queued",
+          title: "Feature X",
+          model: "test-model",
+          reasoningEffort: "high",
+          timeoutSeconds: 1200,
+          workspace: "default",
+          createdAt: "2026-11-12T10:00:00Z",
+          updatedAt: "2026-11-12T10:00:00Z",
+          cancelRequested: false,
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const task = await client.submitAgentTask("agent_001", "Build feature X", {
+      title: "Feature X",
+      model: "test-model",
+      reasoningEffort: "high",
+      workspace: "default",
+      timeoutMinutes: 20,
+    });
+    expect(call).toBe(1);
+    expect(task.taskId).toBe("atask_002");
+    expect(task.status).toBe("queued");
+    expect(task.timeoutSeconds).toBe(1200);
+  });
+
+  it("resumes an Agent task session with follow-up prompt via HTTP client", async () => {
+    let call = 0;
+    const fetch: (req: Request) => Promise<Response> = async (req) => {
+      call++;
+      expect(req.url).toBe("http://localhost:8080/api/v1/agent-tasks/atask_002/resume");
+      expect(req.method).toBe("POST");
+      const body = await req.json();
+      expect(body).toEqual({
+        prompt: "Now write tests for it",
+      });
+      return new Response(
+        JSON.stringify({
+          taskId: "atask_003",
+          agentId: "agent_001",
+          status: "queued",
+          continuedFromTaskId: "atask_002",
+          timeoutSeconds: 600,
+          createdAt: "2026-11-12T10:05:00Z",
+          updatedAt: "2026-11-12T10:05:00Z",
+          cancelRequested: false,
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const task = await client.resumeAgentTask("atask_002", "Now write tests for it");
+    expect(call).toBe(1);
+    expect(task.taskId).toBe("atask_003");
+    expect(task.continuedFromTaskId).toBe("atask_002");
+    expect(task.status).toBe("queued");
+  });
 });

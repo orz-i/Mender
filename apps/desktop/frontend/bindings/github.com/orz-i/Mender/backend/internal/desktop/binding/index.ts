@@ -114,6 +114,7 @@ export type {
     SkillInstallationList,
     SkillMetadata,
     SkillResource,
+    SubmitTaskOptions,
     SyncResult,
     SystemStatus,
     ToolDetail,

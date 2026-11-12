@@ -69,6 +69,7 @@ export type {
   AgentTask,
   AgentTaskEvent,
   AgentTaskEventType,
+  SubmitTaskOptions,
   AgentAdmissionEvent,
   AgentGrants,
   AgentCancelReceipt,

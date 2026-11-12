@@ -46,6 +46,14 @@ export interface AgentTaskEvent {
   payload: Record<string, any>;
   createdAt: string;
 }
+
+export interface SubmitTaskOptions {
+  title?: string;
+  model?: string;
+  reasoningEffort?: string;
+  workspace?: string;
+  timeoutMinutes?: number;
+}
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
 export type AgentGrants = components["schemas"]["AgentGrants"];
 export type AgentCancelReceipt = components["schemas"]["AgentCancelReceipt"];
@@ -244,6 +252,12 @@ export interface ManagementClient {
     onError?: (err: unknown) => void,
   ): () => void;
   cancelAgentTask(taskId:string): Promise<AgentCancelReceipt>;
+  submitAgentTask(
+    agentId: string,
+    prompt: string,
+    options?: SubmitTaskOptions,
+  ): Promise<AgentTask>;
+  resumeAgentTask(taskId: string, prompt: string): Promise<AgentTask>;
   listAgentGrants(agentId:string): Promise<AgentGrants>;
   grantAgentProfile(agentId:string,profileId:string): Promise<void>;
   revokeAgentProfile(agentId:string,profileId:string): Promise<void>;

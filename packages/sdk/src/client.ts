@@ -2,6 +2,7 @@ import createClient from "openapi-fetch";
 
 import type {
   AddProfileToolRequest,
+  AgentTask,
   AgentTaskEvent,
   BrowseToolsInput,
   ConfigureProfileMCPDeliveryRequest,
@@ -28,6 +29,7 @@ import type {
   SearchToolsInput,
   StartMCPServerRequest,
   StartOAuthCredentialRequest,
+  SubmitTaskOptions,
   UpdateProviderRequest,
 } from "./contracts/management-client";
 import type { paths } from "./generated/schema";
@@ -386,6 +388,31 @@ export function createMenderClient(
           params: { path: { taskId } },
         }),
       ) as { events: AgentTaskEvent[] };
+    },
+    async submitAgentTask(
+      agentId: string,
+      prompt: string,
+      options?: SubmitTaskOptions,
+    ): Promise<AgentTask> {
+      return requireData(
+        await client.POST("/agents/{agentId}/tasks" as any, {
+          params: { path: { agentId } },
+          body: {
+            prompt,
+            ...options,
+          },
+        }),
+      ) as AgentTask;
+    },
+    async resumeAgentTask(taskId: string, prompt: string): Promise<AgentTask> {
+      return requireData(
+        await client.POST("/agent-tasks/{taskId}/resume" as any, {
+          params: { path: { taskId } },
+          body: {
+            prompt,
+          },
+        }),
+      ) as AgentTask;
     },
     subscribeAgentTaskEvents(
       taskId: string,

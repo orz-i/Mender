@@ -109,6 +109,7 @@ export interface AgentTask {
     "taskId": string;
     "agentId": string;
     "status": string;
+    "title"?: string;
     "model"?: string;
     "reasoningEffort"?: string;
     "timeoutSeconds": number;
@@ -895,6 +896,14 @@ export interface SkillResource {
     "size": number;
     "sha256": string;
     "executable": boolean;
+}
+
+export interface SubmitTaskOptions {
+    "title"?: string;
+    "model"?: string;
+    "reasoningEffort"?: string;
+    "workspace"?: string;
+    "timeoutMinutes"?: number;
 }
 
 export interface SyncResult {

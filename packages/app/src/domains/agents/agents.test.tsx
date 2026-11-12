@@ -599,4 +599,44 @@ describe("Agents focused management",()=>{
     expect(screen.queryByRole("button", { name: /All agents/ })).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Search agents" })).toBeNull();
   });
+
+  it("launches New task dialog from Tasks tab and submits new interactive task", async () => {
+    const newTask: AgentTask = {
+      ...task,
+      taskId: "atask_created_interactive_1",
+      title: "Interactive Coding",
+      status: "queued",
+    };
+    const submitAgentTask = vi.fn().mockResolvedValue(newTask);
+    show("/agents/" + agent.agentId, {
+      submitAgentTask,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /^Tasks/ }));
+    const newTaskBtns = await screen.findAllByRole("button", { name: "New task" });
+    fireEvent.click(newTaskBtns[0]!);
+
+    expect(await screen.findByRole("heading", { name: "New task" })).toBeTruthy();
+    const promptInput = screen.getByPlaceholderText("Describe what you want the Agent to do...");
+    fireEvent.change(promptInput, { target: { value: "Implement new feature" } });
+
+    const titleInput = screen.getByPlaceholderText("Brief task title (optional)");
+    fireEvent.change(titleInput, { target: { value: "Interactive Coding" } });
+
+    const submitBtn = screen.getByRole("button", { name: "Submit task" });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(submitAgentTask).toHaveBeenCalledWith(
+        agent.agentId,
+        "Implement new feature",
+        expect.objectContaining({
+          title: "Interactive Coding",
+          timeoutMinutes: 10,
+        }),
+      );
+    });
+
+    // Seamlessly transitions into viewing the created task
+    expect(await screen.findByText("atask_created_interactive_1")).toBeTruthy();
+  });
 });

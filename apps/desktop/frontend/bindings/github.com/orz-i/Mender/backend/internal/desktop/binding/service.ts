@@ -547,6 +547,10 @@ export function RestartMCPServer(serverID: string): $CancellablePromise<$models.
     return $Call.ByID(2194966826, serverID);
 }
 
+export function ResumeAgentTask(taskId: string, prompt: string): $CancellablePromise<$models.AgentTask> {
+    return $Call.ByID(3035853017, taskId, prompt);
+}
+
 /**
  * RevealPath opens the operating system file manager focused on targetPath.
  */
@@ -615,6 +619,10 @@ export function StopMCPServer(serverID: string): $CancellablePromise<void> {
 
 export function StopSandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(4195828507, sandboxID);
+}
+
+export function SubmitAgentTask(agentId: string, prompt: string, options: $models.SubmitTaskOptions): $CancellablePromise<$models.AgentTask> {
+    return $Call.ByID(1746219444, agentId, prompt, options);
 }
 
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {

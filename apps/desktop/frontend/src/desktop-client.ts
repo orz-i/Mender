@@ -45,6 +45,7 @@ import type {
   AgentModelChoices,
   AgentTask,
   AgentTaskEvent,
+  SubmitTaskOptions,
   AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
@@ -94,6 +95,7 @@ import {
   type AgentModelChoices as BindingAgentModelChoices,
   type AgentTask as BindingAgentTask,
   type AgentTaskEvent as BindingAgentTaskEvent,
+  type SubmitTaskOptions as BindingSubmitTaskOptions,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxToolSuite as BindingSandboxToolSuite,
@@ -475,6 +477,12 @@ export function createDesktopMenderClient(): ManagementClient {
     async getAgentTaskTranscript(taskId) {
       const result = await Service.GetAgentTaskTranscript(taskId);
       return { events: (result.events ?? []).map(agentTaskEvent) };
+    },
+    async submitAgentTask(agentId, prompt, options) {
+      return agentTask(await Service.SubmitAgentTask(agentId, prompt, options ?? {}));
+    },
+    async resumeAgentTask(taskId, prompt) {
+      return agentTask(await Service.ResumeAgentTask(taskId, prompt));
     },
     subscribeAgentTaskEvents(taskId, onEvent, onError) {
       let active = true;

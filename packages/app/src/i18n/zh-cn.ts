@@ -1711,5 +1711,23 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Tool Playground": "工具调试台",
   "Valid JSON": "JSON 格式合法",
   "Workbench initialized": "工作台已就绪",
+
+  "Ask a follow-up or provide next instructions...": "输入追问或提供进一步指示...",
+  "Brief task title (optional)": "简短任务标题（可选）",
+  "Continue session": "继续会话",
+  "Describe what you want the Agent to do...": "描述需要 Agent 执行的任务...",
+  "Execution budget": "执行预算",
+  "Follow-up prompt": "追问提示词",
+  "New task": "新建任务",
+  "Press Enter to send, Shift+Enter for new line": "按 Enter 发送，Shift+Enter 换行",
+  "Prompt": "提示词",
+  "Send": "发送",
+  "Sending...": "发送中...",
+  "Submit an interactive task for this Agent to execute.": "提交交互式任务供此 Agent 执行。",
+  "Submit task": "提交任务",
+  "Submitting...": "提交中...",
+  "Tasks delegated to this Agent.": "委派给此 Agent 的任务。",
+  "Title": "标题",
+  "optional": "可选",
 };
 

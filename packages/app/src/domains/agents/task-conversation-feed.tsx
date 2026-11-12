@@ -8,6 +8,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
+  SendIcon,
   ShieldAlertIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -456,13 +457,88 @@ function groupEvents(events: AgentTaskEvent[]): FeedGroup[] {
   return groups;
 }
 
+function FollowUpReplyBar({
+  taskId,
+  client,
+  onTaskResumed,
+}: {
+  taskId: string;
+  client: { resumeAgentTask?: (taskId: string, prompt: string) => Promise<AgentTask> };
+  onTaskResumed?: ((newTask: AgentTask) => void) | undefined;
+}) {
+  const [followUpPrompt, setFollowUpPrompt] = useState("");
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState("");
+
+  const handleResume = async () => {
+    const trimmed = followUpPrompt.trim();
+    if (!trimmed || resuming || !client.resumeAgentTask) return;
+    setResuming(true);
+    setResumeError("");
+    try {
+      const newTask = await client.resumeAgentTask(taskId, trimmed);
+      setFollowUpPrompt("");
+      onTaskResumed?.(newTask);
+    } catch (err) {
+      setResumeError(errorMessage(err));
+    } finally {
+      setResuming(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void handleResume();
+    }
+  };
+
+  if (!client.resumeAgentTask) return null;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-xs">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{t("Continue session")}</span>
+        <span className="text-[11px]">{t("Press Enter to send, Shift+Enter for new line")}</span>
+      </div>
+      <textarea
+        value={followUpPrompt}
+        onChange={(e) => setFollowUpPrompt(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={t("Ask a follow-up or provide next instructions...")}
+        rows={2}
+        disabled={resuming}
+        aria-label={t("Follow-up prompt")}
+        className="w-full resize-none rounded-lg border border-input bg-background p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      {resumeError ? (
+        <p role="alert" className="text-xs text-destructive">
+          {resumeError}
+        </p>
+      ) : null}
+      <div className="flex items-center justify-end">
+        <Button
+          size="sm"
+          disabled={!followUpPrompt.trim() || resuming}
+          onClick={() => void handleResume()}
+          className="gap-1.5"
+        >
+          <SendIcon className="size-3.5" />
+          <span>{resuming ? t("Sending...") : t("Send")}</span>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export interface TaskConversationFeedProps {
   task: AgentTask;
   client: Pick<ManagementClient, "getAgentTaskTranscript"> &
-    Partial<Pick<ManagementClient, "subscribeAgentTaskEvents">>;
+    Partial<Pick<ManagementClient, "subscribeAgentTaskEvents" | "resumeAgentTask">>;
   approvals?: Pick<AgentApprovalCapability, "decideAgentApproval" | "listAgentApprovals"> | undefined;
   onTaskUpdated?: ((task: AgentTask) => void) | undefined;
   onHasInlineApproval?: ((hasInline: boolean) => void) | undefined;
+  onTaskResumed?: ((newTask: AgentTask) => void) | undefined;
 }
 
 export function TaskConversationFeed({
@@ -471,6 +547,7 @@ export function TaskConversationFeed({
   approvals,
   onTaskUpdated,
   onHasInlineApproval,
+  onTaskResumed,
 }: TaskConversationFeedProps) {
   const [events, setEvents] = useState<AgentTaskEvent[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -584,6 +661,12 @@ export function TaskConversationFeed({
     setHasNewMessages(false);
   };
 
+  const isTerminal =
+    task.status === "completed" ||
+    task.status === "failed" ||
+    task.status === "cancelled" ||
+    task.status === "unknown";
+
   if (!loading && (!events || events.length === 0)) {
     return (
       <div className="space-y-3">
@@ -596,6 +679,13 @@ export function TaskConversationFeed({
             {task.diagnostic ? taskDiagnosticText(task.diagnostic) : t("No result available.")}
           </p>
         )}
+        {isTerminal && client.resumeAgentTask ? (
+          <FollowUpReplyBar
+            taskId={task.taskId}
+            client={client}
+            onTaskResumed={onTaskResumed}
+          />
+        ) : null}
       </div>
     );
   }
@@ -624,12 +714,13 @@ export function TaskConversationFeed({
               : t("Task status unknown");
 
   return (
-    <div className="relative">
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="flex max-h-[50vh] flex-col gap-4 overflow-y-auto pr-1"
-      >
+    <div className="space-y-3">
+      <div className="relative">
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="flex max-h-[50vh] flex-col gap-4 overflow-y-auto pr-1"
+        >
         {groups.map((item, idx) => {
           switch (item.kind) {
             case "user_prompt": {
@@ -837,6 +928,15 @@ export function TaskConversationFeed({
           <span>{t("New messages")}</span>
           <ArrowDownIcon className="size-3.5" />
         </button>
+      ) : null}
+      </div>
+
+      {isTerminal && client.resumeAgentTask ? (
+        <FollowUpReplyBar
+          taskId={task.taskId}
+          client={client}
+          onTaskResumed={onTaskResumed}
+        />
       ) : null}
     </div>
   );

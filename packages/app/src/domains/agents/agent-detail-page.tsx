@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FolderOpenIcon } from "lucide-react";
+import { FolderOpenIcon, PlusIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
-import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, LocalOwnerCapabilities, ManagementClient, Profile } from "@mender/sdk";
+import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, LocalOwnerCapabilities, ManagementClient, Profile, SubmitTaskOptions } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -131,6 +131,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
     setViewTask(previous=>previous?.taskId===current.taskId&&
       (previous.status!==current.status||previous.result!==current.result||
        previous.diagnostic!==current.diagnostic)?current:previous);
+    setTasks(prev => prev.map(t => t.taskId === current.taskId ? current : t));
   },[]);
   const [hasInlineApproval, setHasInlineApproval] = useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
@@ -139,6 +140,15 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
   const [modelChoices,setModelChoices]=useState<AgentModelChoices|null>(null);
   const [modelLoading,setModelLoading]=useState(false);
   const [modelInspectionError,setModelInspectionError]=useState("");
+
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [newTaskPrompt, setNewTaskPrompt] = useState("");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskModel, setNewTaskModel] = useState("");
+  const [newTaskReasoningEffort, setNewTaskReasoningEffort] = useState("");
+  const [newTaskWorkspace, setNewTaskWorkspace] = useState("");
+  const [newTaskTimeoutMinutes, setNewTaskTimeoutMinutes] = useState(10);
+  const [newTaskError, setNewTaskError] = useState("");
 
   useEffect(()=>{
     if(!agentId)return;
@@ -239,6 +249,41 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
     try{setAgent(await client.updateAgentSettings(agentId,modelDraft.trim(),effortDraft));setSettingsOpen(false);setRevision(v=>v+1);}
     catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
   }
+  function openNewTaskDialog() {
+    setNewTaskPrompt("");
+    setNewTaskTitle("");
+    setNewTaskModel(agent?.defaultModel ?? "");
+    setNewTaskReasoningEffort(agent?.defaultReasoningEffort ?? "");
+    setNewTaskWorkspace("");
+    setNewTaskTimeoutMinutes(10);
+    setNewTaskError("");
+    setNewTaskOpen(true);
+    if (!modelChoices && !modelLoading && agentId) {
+      void inspectModels();
+    }
+  }
+  async function submitNewTask() {
+    if (!agentId || !newTaskPrompt.trim() || busy) return;
+    setBusy(true);
+    setNewTaskError("");
+    try {
+      const options: SubmitTaskOptions = {};
+      if (newTaskTitle.trim()) options.title = newTaskTitle.trim();
+      if (newTaskModel.trim()) options.model = newTaskModel.trim();
+      if (newTaskReasoningEffort.trim()) options.reasoningEffort = newTaskReasoningEffort.trim();
+      if (newTaskWorkspace.trim()) options.workspace = newTaskWorkspace.trim();
+      if (newTaskTimeoutMinutes) options.timeoutMinutes = newTaskTimeoutMinutes;
+
+      const created = await client.submitAgentTask(agentId, newTaskPrompt.trim(), options);
+      setNewTaskOpen(false);
+      setTasks(prev => [created, ...prev]);
+      setViewTask(created);
+    } catch (err) {
+      setNewTaskError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function openTask(id:string){
     try{
       const value=await client.getAgentTask(id);
@@ -289,9 +334,17 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
 
   return <>
     <PageToolbar actions={
-      <Button variant="outline" size="sm" onClick={() => setRevision(n => n + 1)}>
-        {t("Refresh")}
-      </Button>
+      <div className="flex items-center gap-2">
+        {topic === "tasks" ? (
+          <Button size="sm" onClick={openNewTaskDialog}>
+            <PlusIcon className="mr-1.5 size-3.5" />
+            {t("New task")}
+          </Button>
+        ) : null}
+        <Button variant="outline" size="sm" onClick={() => setRevision(n => n + 1)}>
+          {t("Refresh")}
+        </Button>
+      </div>
     } />
     <DetailWorkspace<Topic>
       label="Agent details"
@@ -410,6 +463,16 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
       <EmptyPanelState><EmptyState title="No Agent tools" description="Prepare Agent tools to make them available for explicit Profile selection."/></EmptyPanelState>}
     </ResultPanel>:
     topic==="tasks"?<><ResultPanel title="Agent tasks">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div>
+          <h3 className="text-sm font-semibold">{t("Agent tasks")}</h3>
+          <p className="text-xs text-muted-foreground">{t("Tasks delegated to this Agent.")}</p>
+        </div>
+        <Button size="sm" onClick={openNewTaskDialog}>
+          <PlusIcon className="mr-1.5 size-3.5" />
+          {t("New task")}
+        </Button>
+      </div>
       {tasks.length?<><Table><TableHeader><TableRow>
         <TableHead>{t("Task")}</TableHead><TableHead>{t("Status")}</TableHead>
         <TableHead>{t("Created at")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
@@ -429,7 +492,18 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
               onClick={()=>setConfirm({kind:"cancel",id:task.taskId})}>{t("Cancel task")}</Button>:null}
         </TableCell>
       </TableRow>)}</TableBody></Table></>
-      :<EmptyPanelState><EmptyState title="No Agent tasks" description="Delegated task history will appear here."/></EmptyPanelState>}
+      :<EmptyPanelState>
+        <EmptyState
+          title="No Agent tasks"
+          description="Delegated task history will appear here."
+          action={
+            <Button size="sm" onClick={openNewTaskDialog}>
+              <PlusIcon className="mr-1.5 size-3.5" />
+              {t("New task")}
+            </Button>
+          }
+        />
+      </EmptyPanelState>}
     </ResultPanel>
     {pagination.total > 0 ? <TablePagination label="Tasks" pagination={pagination}/> : null}</>:
     topic==="activity"?<ResultPanel title="Agent activity">
@@ -548,6 +622,16 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
             approvals={approvals}
             onTaskUpdated={updateViewedTask}
             onHasInlineApproval={setHasInlineApproval}
+            onTaskResumed={(resumedTask) => {
+              setTasks((prev) => {
+                const exists = prev.some((t) => t.taskId === resumedTask.taskId);
+                if (exists) {
+                  return prev.map((t) => (t.taskId === resumedTask.taskId ? resumedTask : t));
+                }
+                return [resumedTask, ...prev];
+              });
+              setViewTask(resumedTask);
+            }}
           />
         ) : null}
         <details className="rounded-xl border border-border/70">
@@ -588,6 +672,87 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         <DialogFooter>
           {viewTask?<Button variant="outline" onClick={()=>void openTask(viewTask.taskId)}>{t("Refresh status")}</Button>:null}
           <Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={newTaskOpen} onOpenChange={setNewTaskOpen}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{t("New task")}</DialogTitle>
+          <DialogDescription>{t("Submit an interactive task for this Agent to execute.")}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <label htmlFor="new-task-prompt" className="text-sm font-medium">{t("Prompt")}</label>
+            <textarea
+              id="new-task-prompt"
+              required
+              rows={4}
+              value={newTaskPrompt}
+              onChange={e => setNewTaskPrompt(e.target.value)}
+              placeholder={t("Describe what you want the Agent to do...")}
+              className="w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="new-task-title" className="text-sm font-medium">{t("Title")} ({t("optional")})</label>
+            <Input
+              id="new-task-title"
+              maxLength={128}
+              value={newTaskTitle}
+              onChange={e => setNewTaskTitle(e.target.value)}
+              placeholder={t("Brief task title (optional)")}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="new-task-model" className="text-sm font-medium">{t("Model")}</label>
+              {modelChoices ? (
+                <select
+                  id="new-task-model"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  value={newTaskModel}
+                  onChange={e => setNewTaskModel(e.target.value)}
+                >
+                  <option value="">{t("Use Agent default")} ({modelChoices.current})</option>
+                  {modelChoices.models.map(m => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.id})</option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  id="new-task-model"
+                  maxLength={128}
+                  value={newTaskModel}
+                  onChange={e => setNewTaskModel(e.target.value)}
+                  placeholder={agent?.defaultModel || t("Use Agent default")}
+                />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="new-task-timeout" className="text-sm font-medium">{t("Execution budget")}</label>
+              <select
+                id="new-task-timeout"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                value={newTaskTimeoutMinutes}
+                onChange={e => setNewTaskTimeoutMinutes(Number(e.target.value))}
+              >
+                <option value={10}>{t("{{count}} minutes", { count: "10" })}</option>
+                <option value={20}>{t("{{count}} minutes", { count: "20" })}</option>
+                <option value={30}>{t("{{count}} minutes", { count: "30" })}</option>
+              </select>
+            </div>
+          </div>
+          {newTaskError ? (
+            <p role="alert" className="text-xs text-destructive">{newTaskError}</p>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={busy} onClick={() => setNewTaskOpen(false)}>{t("Cancel")}</Button>
+          <Button disabled={!newTaskPrompt.trim() || busy} onClick={() => void submitNewTask()}>
+            {busy ? t("Submitting...") : t("Submit task")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
