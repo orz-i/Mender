@@ -175,3 +175,11 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 	agentID agentdomain.ID, caller gov.Context) (agentdomain.Task, error) {
 	return s.tasks.Resume(ctx, id, prompt, agentID, caller)
 }
+
+func (s *Service) RecordTaskEvent(ctx context.Context, event agentdomain.TaskEvent) error {
+	return s.tasks.RecordTaskEvent(ctx, event)
+}
+
+func (s *Service) GetTaskTranscript(ctx context.Context, id agentdomain.TaskID, caller gov.Context) ([]agentdomain.TaskEvent, error) {
+	return s.tasks.GetTaskTranscript(ctx, id, caller)
+}

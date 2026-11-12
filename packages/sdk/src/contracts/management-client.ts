@@ -29,6 +29,23 @@ export type AgentTools = components["schemas"]["AgentTools"];
 export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
 export type AgentModelChoices = components["schemas"]["AgentModelChoices"];
 export type AgentTask = components["schemas"]["AgentTask"];
+export type AgentTaskEventType =
+  | 'user_prompt'
+  | 'thinking'
+  | 'message_chunk'
+  | 'tool_call'
+  | 'tool_result'
+  | 'approval'
+  | 'terminal';
+
+export interface AgentTaskEvent {
+  eventId: string;
+  taskId: string;
+  seq: number;
+  type: AgentTaskEventType;
+  payload: Record<string, any>;
+  createdAt: string;
+}
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
 export type AgentGrants = components["schemas"]["AgentGrants"];
 export type AgentCancelReceipt = components["schemas"]["AgentCancelReceipt"];
@@ -220,6 +237,7 @@ export interface ManagementClient {
   listAgentTasks(agentId:string): Promise<{tasks:AgentTask[]}>;
   listAgentAdmissions(agentId:string):Promise<{events:AgentAdmissionEvent[]}>;
   getAgentTask(taskId:string): Promise<AgentTask>;
+  getAgentTaskTranscript(taskId: string): Promise<{ events: AgentTaskEvent[] }>;
   cancelAgentTask(taskId:string): Promise<AgentCancelReceipt>;
   listAgentGrants(agentId:string): Promise<AgentGrants>;
   grantAgentProfile(agentId:string,profileId:string): Promise<void>;

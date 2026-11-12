@@ -33,6 +33,7 @@ vi.mock(
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
       GetAgentTask: vi.fn(),
+      GetAgentTaskTranscript: vi.fn(),
       ListAgentTasks: vi.fn(),
       ListPendingAgentApprovals: vi.fn(),
       DecideAgentApproval: vi.fn(),
@@ -163,6 +164,27 @@ describe("desktop Mender client", () => {
 
     vi.mocked(Service.GetAgentTask).mockResolvedValue({ ...raw, timeoutSeconds: 777 });
     await expect(client.getAgentTask(raw.taskId)).rejects.toBeInstanceOf(MenderClientInvariantError);
+  });
+
+  it("retrieves transcript events for an Agent task via desktop client", async () => {
+    const client = createDesktopMenderClient();
+    vi.mocked(Service.GetAgentTaskTranscript).mockResolvedValue({
+      events: [
+        {
+          eventId: "evt_1",
+          taskId: "atask_123",
+          seq: 1,
+          type: "user_prompt",
+          payload: { prompt: "test prompt" },
+          createdAt: "2026-11-12T10:00:00Z",
+        },
+      ],
+    });
+    const result = await client.getAgentTaskTranscript("atask_123");
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]?.eventId).toBe("evt_1");
+    expect(result.events[0]?.type).toBe("user_prompt");
+    expect(result.events[0]?.payload.prompt).toBe("test prompt");
   });
 
   it("forwards SSH key import-only passphrases through Wails without persisting them in returned metadata", async () => {

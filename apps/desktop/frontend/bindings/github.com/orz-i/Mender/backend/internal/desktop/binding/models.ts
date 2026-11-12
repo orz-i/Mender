@@ -122,6 +122,15 @@ export interface AgentTask {
     "continuedFromTaskId"?: string;
 }
 
+export interface AgentTaskEvent {
+    "eventId": string;
+    "taskId": string;
+    "seq": number;
+    "type": string;
+    "payload": { [_ in string]?: any } | null;
+    "createdAt": string;
+}
+
 export interface AgentTaskList {
     "tasks": AgentTask[] | null;
 }
@@ -135,6 +144,10 @@ export interface AgentTaskObservation {
     "sessionRecorded": boolean;
     "sessionRecoverability": string;
     "leaderReaped": boolean;
+}
+
+export interface AgentTaskTranscript {
+    "events": AgentTaskEvent[] | null;
 }
 
 export interface AgentTool {

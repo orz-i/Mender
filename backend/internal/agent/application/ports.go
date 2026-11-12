@@ -57,6 +57,8 @@ type TaskRepository interface {
 	RequestCancel(context.Context, agentdomain.TaskID, uint64) error
 	Workspace(context.Context, agentdomain.ID, string) (string, error)
 	HasWorkspaceGrant(context.Context, agentdomain.ID, string, string) (bool, error)
+	RecordTaskEvent(context.Context, agentdomain.TaskEvent) error
+	ListTaskEvents(context.Context, agentdomain.TaskID) ([]agentdomain.TaskEvent, error)
 }
 
 type ApprovalRepository interface {

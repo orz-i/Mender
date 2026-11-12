@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -30,6 +31,7 @@ type RunConfig struct {
 	AllowNativeYOLO     bool                                   // owner-approved, unexpired Antigravity trusted workspace only
 	Resume              *agentdomain.SessionContinuation       // host-resolved, never from Tool arguments
 	Observe             func(agentdomain.ExecutionEvent) error // trusted, Task-scoped evidence sink
+	RecordEvent         func(agentdomain.TaskEventType, map[string]any) error
 }
 
 // ToolSupplyResolver is the trusted Runtime's optional, backend-neutral
@@ -156,6 +158,16 @@ func (s *TaskService) SubmitWithOptions(ctx context.Context, id agentdomain.ID, 
 		s.mu.Unlock()
 		return agentdomain.Task{}, err
 	}
+	if evtID, err := agentdomain.NewTaskEventID(); err == nil {
+		_ = s.store.RecordTaskEvent(ctx, agentdomain.TaskEvent{
+			ID:        evtID,
+			TaskID:    taskID,
+			Seq:       1,
+			Type:      agentdomain.TaskEventUserPrompt,
+			Payload:   map[string]any{"prompt": prompt},
+			CreatedAt: now,
+		})
+	}
 	runCtx, cancel := context.WithTimeout(s.rootContext, task.ExecutionTimeout())
 	s.active[taskID] = cancel
 	s.wg.Add(1)
@@ -198,13 +210,32 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 		delete(s.active, task.ID)
 		s.mu.Unlock()
 	}()
+	var eventSeq atomic.Int64
+	eventSeq.Store(1) // user_prompt was seq 1
+	recordEvent := func(eventType agentdomain.TaskEventType, payload map[string]any) error {
+		evtID, err := agentdomain.NewTaskEventID()
+		if err != nil {
+			return err
+		}
+		curSeq := eventSeq.Add(1)
+		return s.store.RecordTaskEvent(context.WithoutCancel(ctx), agentdomain.TaskEvent{
+			ID:        evtID,
+			TaskID:    task.ID,
+			Seq:       curSeq,
+			Type:      eventType,
+			Payload:   payload,
+			CreatedAt: time.Now().UTC(),
+		})
+	}
 	// A concurrent cancellation may fence queued → running.
 	if err := ctx.Err(); err != nil {
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
+		_ = recordEvent(agentdomain.TaskEventTerminal, map[string]any{"status": string(agentdomain.TaskCancelled), "diagnostic": "Task cancelled"})
 		return
 	}
 	if err := s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
+		_ = recordEvent(agentdomain.TaskEventTerminal, map[string]any{"status": string(agentdomain.TaskCancelled), "diagnostic": "Task cancelled"})
 		return
 	}
 	// Reservation is durable before resolving capabilities or starting a CLI.
@@ -218,6 +249,7 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 		}
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
 			agentdomain.TaskRunning, next, "", diagnostic)
+		_ = recordEvent(agentdomain.TaskEventTerminal, map[string]any{"status": string(next), "diagnostic": diagnostic})
 		return
 	}
 	config := RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
@@ -227,8 +259,25 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 			defer done()
 			return s.store.RecordExecution(writeCtx, task, s.runtimeInstance, event)
 		},
+		RecordEvent: recordEvent,
 		PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
-			return s.approvals.requestPermission(ctx, task, caller, req)
+			_ = recordEvent(agentdomain.TaskEventApproval, map[string]any{
+				"toolCallId": req.ToolCallID,
+				"kind":       req.Kind,
+				"target":     req.Target,
+				"canAllow":   req.CanAllow,
+				"phase":      "requested",
+			})
+			decision, decErr := s.approvals.requestPermission(ctx, task, caller, req)
+			if decErr == nil {
+				_ = recordEvent(agentdomain.TaskEventApproval, map[string]any{
+					"toolCallId": req.ToolCallID,
+					"choice":     string(decision.Choice),
+					"policy":     decision.AuthorizedByPolicy,
+					"phase":      "decided",
+				})
+			}
+			return decision, decErr
 		}}
 	// Runtime heartbeat reports only that this task's local supervisory worker
 	// remains alive. It is separate from native Agent progress or completion
@@ -282,6 +331,7 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 	if ctx.Err() != nil && err == nil {
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
 			agentdomain.TaskRunning, agentdomain.TaskUnknown, "", "Agent outcome unknown after cancellation")
+		_ = recordEvent(agentdomain.TaskEventTerminal, map[string]any{"status": string(agentdomain.TaskUnknown), "diagnostic": "Agent outcome unknown after cancellation"})
 		return
 	}
 	next := agentdomain.TaskCompleted
@@ -330,6 +380,16 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 		_ = s.store.Transition(writeCtx, task.ID, task.Generation, agentdomain.TaskRunning,
 			agentdomain.TaskUnknown, "", "Agent outcome unknown after execution evidence loss")
 	}
+	terminalPayload := map[string]any{
+		"status": string(next),
+	}
+	if result != "" {
+		terminalPayload["result"] = result
+	}
+	if diagnostic != "" {
+		terminalPayload["diagnostic"] = diagnostic
+	}
+	_ = recordEvent(agentdomain.TaskEventTerminal, terminalPayload)
 }
 func (s *TaskService) Task(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, error) {
 	task, _, err := s.authorizedTask(ctx, id, caller)
@@ -409,4 +469,15 @@ func (s *TaskService) Close() error {
 	s.mu.Unlock()
 	s.wg.Wait()
 	return nil
+}
+
+func (s *TaskService) RecordTaskEvent(ctx context.Context, event agentdomain.TaskEvent) error {
+	return s.store.RecordTaskEvent(ctx, event)
+}
+
+func (s *TaskService) GetTaskTranscript(ctx context.Context, id agentdomain.TaskID, caller gov.Context) ([]agentdomain.TaskEvent, error) {
+	if _, _, err := s.authorizedTask(ctx, id, caller); err != nil {
+		return nil, err
+	}
+	return s.store.ListTaskEvents(ctx, id)
 }

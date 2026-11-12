@@ -263,6 +263,61 @@ func (r Runner) executeConfiguredOnce(ctx context.Context, agent agentdomain.Age
 				lastProgress = time.Now()
 			}
 			if params.Update.SessionUpdate != "agent_message_chunk" {
+				switch params.Update.SessionUpdate {
+				case "agent_thought_chunk", "thought", "thinking":
+					if config.RecordEvent != nil {
+						var thoughtChunk struct {
+							Type string `json:"type"`
+							Text string `json:"text"`
+						}
+						if len(params.Update.Content) > 0 && json.Unmarshal(params.Update.Content, &thoughtChunk) == nil && thoughtChunk.Text != "" {
+							_ = config.RecordEvent(agentdomain.TaskEventThinking, map[string]any{"thought": thoughtChunk.Text})
+						} else {
+							var rawText string
+							if len(params.Update.Content) > 0 && json.Unmarshal(params.Update.Content, &rawText) == nil && rawText != "" {
+								_ = config.RecordEvent(agentdomain.TaskEventThinking, map[string]any{"thought": rawText})
+							}
+						}
+					}
+				case "tool_call":
+					if config.RecordEvent != nil {
+						payload := map[string]any{}
+						var fullUpdate map[string]any
+						if len(msg.Params) > 0 {
+							var p map[string]any
+							if json.Unmarshal(msg.Params, &p) == nil {
+								if u, ok := p["update"].(map[string]any); ok {
+									fullUpdate = u
+								}
+							}
+						}
+						for k, v := range fullUpdate {
+							if k != "content" {
+								payload[k] = v
+							}
+						}
+						_ = config.RecordEvent(agentdomain.TaskEventToolCall, payload)
+					}
+				case "tool_call_update", "tool_result":
+					if config.RecordEvent != nil {
+						payload := map[string]any{}
+						var fullUpdate map[string]any
+						if len(msg.Params) > 0 {
+							var p map[string]any
+							if json.Unmarshal(msg.Params, &p) == nil {
+								if u, ok := p["update"].(map[string]any); ok {
+									fullUpdate = u
+								}
+							}
+						}
+						for k, v := range fullUpdate {
+							if k != "content" {
+								payload[k] = v
+							}
+						}
+						_ = config.RecordEvent(agentdomain.TaskEventToolResult, payload)
+					}
+				}
 				return nil
 			}
 			var chunk struct {
@@ -279,6 +334,13 @@ func (r Runner) executeConfiguredOnce(ctx context.Context, agent agentdomain.Age
 					return tagFailure(stageResult, errors.New("ACP Agent result exceeds limit"))
 				}
 				_, _ = result.WriteString(chunk.Text)
+				if config.RecordEvent != nil && chunk.Text != "" {
+					_ = config.RecordEvent(agentdomain.TaskEventMessageChunk, map[string]any{"text": chunk.Text})
+				}
+			} else if chunk.Type == "thought" || chunk.Type == "thinking" {
+				if config.RecordEvent != nil && chunk.Text != "" {
+					_ = config.RecordEvent(agentdomain.TaskEventThinking, map[string]any{"thought": chunk.Text})
+				}
 			}
 			return nil
 		}

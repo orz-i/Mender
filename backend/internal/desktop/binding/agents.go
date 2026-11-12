@@ -68,6 +68,17 @@ type AgentTask struct {
 type AgentTaskList struct {
 	Tasks []AgentTask `json:"tasks"`
 }
+type AgentTaskEvent struct {
+	EventID   string         `json:"eventId"`
+	TaskID    string         `json:"taskId"`
+	Seq       int64          `json:"seq"`
+	Type      string         `json:"type"`
+	Payload   map[string]any `json:"payload"`
+	CreatedAt string         `json:"createdAt"`
+}
+type AgentTaskTranscript struct {
+	Events []AgentTaskEvent `json:"events"`
+}
 type AgentAdmissionEvent struct {
 	AgentID       string `json:"agentId"`
 	Action        string `json:"action"`
@@ -286,6 +297,34 @@ func (s *Service) GetAgentTask(id string) (AgentTask, error) {
 		return AgentTask{}, err
 	}
 	return projectTask(task), nil
+}
+func (s *Service) GetAgentTaskTranscript(taskId string) (AgentTaskTranscript, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentTaskTranscript{}, err
+	}
+	parsed, err := agentdomain.ParseTaskID(taskId)
+	if err != nil {
+		return AgentTaskTranscript{}, err
+	}
+	events, err := s.runtime.Agents.GetTaskTranscript(s.ctx, parsed, caller)
+	if err != nil {
+		return AgentTaskTranscript{}, err
+	}
+	out := AgentTaskTranscript{
+		Events: make([]AgentTaskEvent, 0, len(events)),
+	}
+	for _, e := range events {
+		out.Events = append(out.Events, AgentTaskEvent{
+			EventID:   string(e.ID),
+			TaskID:    string(e.TaskID),
+			Seq:       e.Seq,
+			Type:      string(e.Type),
+			Payload:   e.Payload,
+			CreatedAt: e.CreatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return out, nil
 }
 func (s *Service) CancelAgentTask(id string) (AgentCancelReceipt, error) {
 	caller, err := s.agentOwnerContext()

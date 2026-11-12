@@ -117,6 +117,16 @@ func (s *TaskService) Resume(ctx context.Context, id agentdomain.TaskID, prompt 
 		}
 		return agentdomain.Task{}, err
 	}
+	if evtID, err := agentdomain.NewTaskEventID(); err == nil {
+		_ = s.store.RecordTaskEvent(ctx, agentdomain.TaskEvent{
+			ID:        evtID,
+			TaskID:    taskID,
+			Seq:       1,
+			Type:      agentdomain.TaskEventUserPrompt,
+			Payload:   map[string]any{"prompt": prompt},
+			CreatedAt: now,
+		})
+	}
 	runCtx, cancel := context.WithTimeout(s.rootContext, task.ExecutionTimeout())
 	s.active[taskID] = cancel
 	s.wg.Add(1)

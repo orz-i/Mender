@@ -2,6 +2,7 @@ import createClient from "openapi-fetch";
 
 import type {
   AddProfileToolRequest,
+  AgentTaskEvent,
   BrowseToolsInput,
   ConfigureProfileMCPDeliveryRequest,
   CreateDaytonaSandboxRequest,
@@ -378,6 +379,13 @@ export function createMenderClient(
     async listAgentTasks(agentId){return requireData(await client.GET("/agents/{agentId}/tasks",{params:{path:{agentId}}}));},
     async listAgentAdmissions(agentId){return requireData(await client.GET("/agents/{agentId}/admissions",{params:{path:{agentId}}}));},
     async getAgentTask(taskId){return requireData(await client.GET("/agent-tasks/{taskId}",{params:{path:{taskId}}}));},
+    async getAgentTaskTranscript(taskId: string): Promise<{ events: AgentTaskEvent[] }> {
+      return requireData(
+        await client.GET("/agent-tasks/{taskId}/transcript" as any, {
+          params: { path: { taskId } },
+        }),
+      ) as { events: AgentTaskEvent[] };
+    },
     async cancelAgentTask(taskId){return requireData(await client.POST("/agent-tasks/{taskId}/cancel",{params:{path:{taskId}}}));},
     async listAgentGrants(agentId){return requireData(await client.GET("/agents/{agentId}/profile-grants",{params:{path:{agentId}}}));},
     async grantAgentProfile(agentId,profileId){

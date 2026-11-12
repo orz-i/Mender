@@ -16,5 +16,10 @@ func OpenTyped(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open typed Agent sqlite: %w", err)
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err := s.ensureTaskEventsTable(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ensure task events table: %w", err)
+	}
+	return s, nil
 }

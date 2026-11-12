@@ -121,6 +121,8 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 		t.Fatal("unexpected Task", tasks)
 	}
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/atask_00000000000000000000000000000000", nil, http.StatusNotFound)
+	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/atask_00000000000000000000000000000000/transcript", nil, http.StatusNotFound)
+	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/invalid/transcript", nil, http.StatusBadRequest)
 	requestJSON(t, server.Client(), http.MethodPost, api+"/agent-tasks/invalid/cancel", nil, http.StatusBadRequest)
 	// Denied Agent Policy operations must be independently auditable through
 	// the owner-only API, without exporting PrincipalRefs or task prompts.

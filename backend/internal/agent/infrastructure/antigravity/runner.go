@@ -170,7 +170,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		}
 	}
 
-	response, err := parseScannerObserved(scanner, cfg.Observe, alreadyInitialized, cfg.Resume)
+	response, err := parseScannerObserved(scanner, cfg.Observe, alreadyInitialized, cfg.Resume, cfg.RecordEvent)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -229,7 +229,7 @@ func scanResumeInit(ctx context.Context, cmd *exec.Cmd, scanner *bufio.Scanner) 
 }
 
 func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEvent) error) (string, error) {
-	return parseScannerObserved(newStreamScanner(reader), observe, false, nil)
+	return parseScannerObserved(newStreamScanner(reader), observe, false, nil, nil)
 }
 
 func resumedProtocolError(resume *agentdomain.SessionContinuation) error {
@@ -243,7 +243,7 @@ func resumedProtocolError(resume *agentdomain.SessionContinuation) error {
 }
 
 func parseScannerObserved(scanner *bufio.Scanner, observe func(agentdomain.ExecutionEvent) error,
-	gotInit bool, resume *agentdomain.SessionContinuation) (string, error) {
+	gotInit bool, resume *agentdomain.SessionContinuation, recordEvent func(agentdomain.TaskEventType, map[string]any) error) (string, error) {
 	var result string
 	gotResult := false
 	lastProgress := time.Time{}
@@ -279,6 +279,25 @@ func parseScannerObserved(scanner *bufio.Scanner, observe func(agentdomain.Execu
 				}
 				lastProgress = time.Now()
 			}
+			if recordEvent != nil {
+				var rawStep struct {
+					StepUpdate map[string]any `json:"step_update"`
+				}
+				if json.Unmarshal(scanner.Bytes(), &rawStep) == nil && rawStep.StepUpdate != nil {
+					stepType, _ := rawStep.StepUpdate["step_type"].(string)
+					if stepType == "tool" {
+						_ = recordEvent(agentdomain.TaskEventToolCall, rawStep.StepUpdate)
+					} else if stepType == "thinking" || stepType == "thought" {
+						_ = recordEvent(agentdomain.TaskEventThinking, rawStep.StepUpdate)
+					} else if _, hasTool := rawStep.StepUpdate["tool_info"]; hasTool {
+						_ = recordEvent(agentdomain.TaskEventToolCall, rawStep.StepUpdate)
+					} else {
+						_ = recordEvent(agentdomain.TaskEventThinking, rawStep.StepUpdate)
+					}
+				} else {
+					_ = recordEvent(agentdomain.TaskEventThinking, map[string]any{"raw": string(scanner.Bytes())})
+				}
+			}
 		case "result":
 			if !gotInit || gotResult || len(frame.Result) == 0 {
 				return "", resumedProtocolError(resume)
@@ -303,6 +322,9 @@ func parseScannerObserved(scanner *bufio.Scanner, observe func(agentdomain.Execu
 					return "", stageError("result")
 				}
 				result = terminal.Response
+				if recordEvent != nil && result != "" {
+					_ = recordEvent(agentdomain.TaskEventMessageChunk, map[string]any{"text": result})
+				}
 				if observe != nil {
 					if err := observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventTerminalSeen}); err != nil {
 						return "", fmt.Errorf("%w: native terminal evidence unavailable", agentdomain.ErrOutcomeUncertain)

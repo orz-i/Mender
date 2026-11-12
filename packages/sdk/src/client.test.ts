@@ -693,4 +693,38 @@ describe("Mender SDK", () => {
       message: "tool not found",
     });
   });
+
+  it("retrieves transcript events for an Agent task", async () => {
+    let call = 0;
+    const fetch = async (request: Request) => {
+      call += 1;
+      expect(request.method).toBe("GET");
+      expect(request.url).toContain("/api/v1/agent-tasks/atask_001/transcript");
+      return new Response(
+        JSON.stringify({
+          events: [
+            {
+              eventId: "evt_1",
+              taskId: "atask_001",
+              seq: 1,
+              type: "user_prompt",
+              payload: { prompt: "Analyze project health" },
+              createdAt: "2026-11-12T10:00:00Z",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const { events } = await client.getAgentTaskTranscript("atask_001");
+    expect(call).toBe(1);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("user_prompt");
+    expect(events[0]?.payload.prompt).toBe("Analyze project health");
+  });
 });

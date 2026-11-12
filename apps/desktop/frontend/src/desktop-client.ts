@@ -43,6 +43,7 @@ import type {
   AgentWorkspace,
   AgentModelChoices,
   AgentTask,
+  AgentTaskEvent,
   AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
@@ -91,6 +92,7 @@ import {
   type AgentWorkspace as BindingAgentWorkspace,
   type AgentModelChoices as BindingAgentModelChoices,
   type AgentTask as BindingAgentTask,
+  type AgentTaskEvent as BindingAgentTaskEvent,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxToolSuite as BindingSandboxToolSuite,
@@ -469,6 +471,10 @@ export function createDesktopMenderClient(): ManagementClient {
       return {events:(result.events??[]).map(agentAdmissionEvent)};
     },
     async getAgentTask(taskId){return agentTask(await Service.GetAgentTask(taskId));},
+    async getAgentTaskTranscript(taskId) {
+      const result = await Service.GetAgentTaskTranscript(taskId);
+      return { events: (result.events ?? []).map(agentTaskEvent) };
+    },
     async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
     async listAgentGrants(agentId){
       const result=await Service.ListAgentGrants(agentId);
@@ -1082,6 +1088,17 @@ function agentTask(value:BindingAgentTask):AgentTask {
     case "cancelled":case "unknown":return {...task,timeoutSeconds,status:value.status};
     default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
   }
+}
+
+function agentTaskEvent(value: BindingAgentTaskEvent): AgentTaskEvent {
+  return {
+    eventId: value.eventId,
+    taskId: value.taskId,
+    seq: value.seq,
+    type: value.type as AgentTaskEvent["type"],
+    payload: typeof value.payload === "object" && value.payload !== null ? value.payload : {},
+    createdAt: value.createdAt,
+  };
 }
 
 function credentialStatus(value: BindingCredentialStatus): CredentialStatus {

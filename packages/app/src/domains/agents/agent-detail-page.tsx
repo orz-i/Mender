@@ -24,9 +24,10 @@ import { AgentWorkspaceSettings } from "./agent-workspaces";
 import { agentBackendLabel } from "./agent-backends";
 import { AgentTaskApprovals } from "./agent-approvals";
 import { AgentToolExecutionSettings } from "./agent-tool-execution";
+import { TaskConversationFeed } from "./task-conversation-feed";
 import { usePageHeading } from "../../shell/page-chrome";
 
-function taskStatusText(value:AgentTask["status"]):string{
+export function taskStatusText(value:AgentTask["status"]):string{
   switch(value){
     case "queued":return t("Queued");
     case "running":return t("Running");
@@ -36,7 +37,7 @@ function taskStatusText(value:AgentTask["status"]):string{
     case "unknown":return t("Unknown");
   }
 }
-function taskDiagnosticText(value:string):string{
+export function taskDiagnosticText(value:string):string{
   // Task diagnostics are a closed vocabulary from the local Agent service.
   // Older or extension-specific codes retain their exact original content.
   switch(value){
@@ -528,7 +529,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
     </Dialog>
 
     <Dialog open={viewTask!==null} onOpenChange={open=>{if(!open)setViewTask(null)}}>
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("Agent task result")}</DialogTitle>
           <DialogDescription className="flex min-w-0 flex-wrap items-center gap-2">
@@ -539,8 +540,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
         {viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("Unknown does not mean the task succeeded or failed. Review actual deliverables before planning any new task; do not retry the original prompt automatically.")}</p>:null}
-        {viewTask?.result?<pre className="max-h-[38vh] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-xs leading-5">{viewTask.result}</pre>:
-          <p className="text-sm leading-6 text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
+        {viewTask ? <TaskConversationFeed task={viewTask} client={client} /> : null}
         <details className="rounded-xl border border-border/70">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{t("Execution details")}</summary>
           <div className="space-y-4 border-t border-border/70 p-4">

@@ -62,6 +62,7 @@ function show(path:string,overrides:Partial<ManagementClient>={}){
     ensureAgentTools:vi.fn().mockResolvedValue(suite),
     listAgentTasks:vi.fn().mockResolvedValue({tasks:[task]}),
     getAgentTask:vi.fn().mockResolvedValue(task),
+    getAgentTaskTranscript:vi.fn().mockResolvedValue({ events: [] }),
     listAgentAdmissions:vi.fn().mockResolvedValue({events:[{
       agentId:agent.agentId,action:"agent.task.submit",origin:"mcp",principalKind:"service",
       scopeKind:"profile",policyKind:"allow",policyReason:"default_allow",status:"admitted",

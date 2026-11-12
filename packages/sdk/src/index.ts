@@ -67,6 +67,8 @@ export type {
   AgentWorkspace,
   AgentModelChoices,
   AgentTask,
+  AgentTaskEvent,
+  AgentTaskEventType,
   AgentAdmissionEvent,
   AgentGrants,
   AgentCancelReceipt,

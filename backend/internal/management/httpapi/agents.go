@@ -190,6 +190,27 @@ func (h *Handler) getAgentTask(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, task)
 }
+func (h *Handler) getAgentTaskTranscript(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseTaskID(r.PathValue("taskId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	events, err := h.runtime.Agents.GetTaskTranscript(r.Context(), id, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	if events == nil {
+		events = []agentdomain.TaskEvent{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
 func (h *Handler) cancelAgentTask(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseTaskID(r.PathValue("taskId"))
 	if err != nil {
