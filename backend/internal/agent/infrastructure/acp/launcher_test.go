@@ -30,3 +30,19 @@ func TestLocalAgentBackendAvailabilityIsInert(t *testing.T) {
 		t.Fatalf("unexpected launcher diagnostic: %v", err)
 	}
 }
+
+func TestLocalAgentAvailabilityDiscovery(t *testing.T) {
+	launcher, err := NewLocalFactory(processisolation.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range []agentdomain.Backend{
+		agentdomain.BackendOpenCode,
+		agentdomain.BackendGrok,
+		agentdomain.BackendAntigravity,
+		agentdomain.BackendCodex,
+	} {
+		p, err := launcher.Availability(b)
+		t.Logf("backend %-12s => path=%q, err=%v", b, p, err)
+	}
+}

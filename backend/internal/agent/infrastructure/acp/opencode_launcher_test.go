@@ -111,6 +111,9 @@ func TestOpenCodeLocalLaunchUsesPinnedExecutableAndACPStdioOnly(t *testing.T) {
 }
 
 func TestOpenCodeRestrictedWithoutToolSupplyStillRequiresOwnerExecuteApproval(t *testing.T) {
+	if !processisolation.New().Info().RestrictedHostAvailable {
+		t.Skip("restricted_host process isolation unavailable on this host")
+	}
 	factory, err := NewLocalFactory(processisolation.New())
 	if err != nil {
 		t.Fatal(err)

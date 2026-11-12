@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -84,27 +86,117 @@ func (f *LocalFactory) Availability(backend agentdomain.Backend) (string, error)
 	}
 }
 
-func trustedBinary(name string) (string, error) {
+func approvedDirectories() ([]string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("%w: resolve local CLI home: %w", agentdomain.ErrUnavailable, err)
+		return nil, fmt.Errorf("%w: resolve local CLI home: %w", agentdomain.ErrUnavailable, err)
 	}
+	if runtime.GOOS == "windows" {
+		localAppData := os.Getenv("LOCALAPPDATA")
+		appData := os.Getenv("APPDATA")
+		systemRoot := os.Getenv("SystemRoot")
+		if systemRoot == "" {
+			systemRoot = "C:\\Windows"
+		}
+		programFiles := os.Getenv("ProgramFiles")
+		programFilesX86 := os.Getenv("ProgramFiles(x86)")
+
+		dirs := make([]string, 0, 10)
+		if localAppData != "" {
+			dirs = append(dirs,
+				filepath.Join(localAppData, "Microsoft", "WinGet", "Links"),
+				filepath.Join(localAppData, "agy", "bin"),
+				filepath.Join(localAppData, "pnpm"),
+				filepath.Join(localAppData, "Programs"),
+			)
+		}
+		if home != "" {
+			dirs = append(dirs,
+				filepath.Join(home, ".grok", "bin"),
+				filepath.Join(home, ".local", "bin"),
+			)
+		}
+		if appData != "" {
+			dirs = append(dirs, filepath.Join(appData, "npm"))
+		}
+		dirs = append(dirs,
+			filepath.Join(systemRoot, "System32"),
+			systemRoot,
+		)
+		if programFiles != "" {
+			dirs = append(dirs, programFiles)
+		}
+		if programFilesX86 != "" {
+			dirs = append(dirs, programFilesX86)
+		}
+		return dirs, nil
+	}
+	return []string{
+		"/opt/homebrew/bin",
+		"/usr/local/bin",
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, ".npm-global", "bin"),
+		"/usr/bin",
+	}, nil
+}
+
+func candidateNames(name string) []string {
+	if runtime.GOOS == "windows" {
+		if filepath.Ext(name) != "" {
+			return []string{name}
+		}
+		return []string{
+			name + ".exe",
+			name + ".cmd",
+			name + ".bat",
+			name,
+		}
+	}
+	return []string{name}
+}
+
+func isExecutable(info os.FileInfo, path string) bool {
+	if !info.Mode().IsRegular() {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		ext := strings.ToLower(filepath.Ext(path))
+		switch ext {
+		case ".exe", ".cmd", ".bat", ".com":
+			return true
+		default:
+			return false
+		}
+	}
+	return info.Mode()&0o111 != 0
+}
+
+func trustedBinary(name string) (string, error) {
+	dirs, err := approvedDirectories()
+	if err != nil {
+		return "", err
+	}
+	names := candidateNames(name)
 	// The executable is selected by this host-owned allowlist, *not* from
 	// inherited PATH or user-/model-supplied command-line arguments.
-	for _, dir := range []string{"/opt/homebrew/bin", "/usr/local/bin", filepath.Join(home, ".local", "bin"),
-		filepath.Join(home, ".npm-global", "bin"), "/usr/bin"} {
-		candidate := filepath.Join(dir, name)
-		canonical, err := filepath.EvalSymlinks(candidate)
-		if err != nil {
+	for _, dir := range dirs {
+		if dir == "" {
 			continue
 		}
-		absolute, err := filepath.Abs(canonical)
-		if err != nil {
-			continue
-		}
-		info, err := os.Stat(absolute)
-		if err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
-			return absolute, nil
+		for _, n := range names {
+			candidate := filepath.Join(dir, n)
+			canonical, err := filepath.EvalSymlinks(candidate)
+			if err != nil {
+				continue
+			}
+			absolute, err := filepath.Abs(canonical)
+			if err != nil {
+				continue
+			}
+			info, err := os.Stat(absolute)
+			if err == nil && isExecutable(info, absolute) {
+				return absolute, nil
+			}
 		}
 	}
 	return "", fmt.Errorf("%w: %s not found in approved executable locations", agentdomain.ErrUnavailable, name)
@@ -220,7 +312,11 @@ func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Age
 	if err != nil {
 		return nil, fmt.Errorf("agent workspace unavailable: %w", err)
 	}
-	if filepath.Clean(root) != workspaceRoot {
+	sameRoot := filepath.Clean(root) == workspaceRoot
+	if !sameRoot && runtime.GOOS == "windows" {
+		sameRoot = strings.EqualFold(filepath.Clean(root), workspaceRoot)
+	}
+	if !sameRoot {
 		return nil, fmt.Errorf("%w: Agent workspace root changed", agentdomain.ErrUnavailable)
 	}
 	info, err := os.Stat(root)
@@ -233,8 +329,50 @@ func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Age
 	}
 	isolation := runtimedomain.IsolationMode(spec.Isolation)
 	arguments := []string{}
-	environment := []string{"PATH=/usr/bin:/bin:/opt/homebrew/bin", "HOME=" + home,
-		"TMPDIR=" + os.TempDir(), "NO_BROWSER=1", "CI=1"}
+	var environment []string
+	if runtime.GOOS == "windows" {
+		systemRoot := os.Getenv("SystemRoot")
+		if systemRoot == "" {
+			systemRoot = "C:\\Windows"
+		}
+		dirs, _ := approvedDirectories()
+		pathDirs := append([]string{
+			filepath.Join(systemRoot, "System32"),
+			systemRoot,
+		}, dirs...)
+		seen := make(map[string]bool)
+		filtered := make([]string, 0, len(pathDirs))
+		for _, p := range pathDirs {
+			clean := filepath.Clean(p)
+			if clean != "." && clean != "" && !seen[strings.ToLower(clean)] {
+				seen[strings.ToLower(clean)] = true
+				filtered = append(filtered, clean)
+			}
+		}
+		winPath := strings.Join(filtered, string(filepath.ListSeparator))
+		environment = []string{
+			"PATH=" + winPath,
+			"USERPROFILE=" + home,
+			"HOME=" + home,
+			"LOCALAPPDATA=" + os.Getenv("LOCALAPPDATA"),
+			"APPDATA=" + os.Getenv("APPDATA"),
+			"SystemRoot=" + systemRoot,
+			"TEMP=" + os.TempDir(),
+			"TMP=" + os.TempDir(),
+			"TMPDIR=" + os.TempDir(),
+			"NO_BROWSER=1",
+			"CI=1",
+		}
+		if comspec := os.Getenv("COMSPEC"); comspec != "" {
+			environment = append(environment, "COMSPEC="+comspec)
+		}
+		if pathext := os.Getenv("PATHEXT"); pathext != "" {
+			environment = append(environment, "PATHEXT="+pathext)
+		}
+	} else {
+		environment = []string{"PATH=/usr/bin:/bin:/opt/homebrew/bin", "HOME=" + home,
+			"TMPDIR=" + os.TempDir(), "NO_BROWSER=1", "CI=1"}
+	}
 	switch spec.Backend {
 	case agentdomain.BackendAntigravity:
 		// Antigravity exposes a native headless stream, not ACP. Its dedicated
@@ -271,8 +409,12 @@ func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Age
 	default:
 		return nil, agentdomain.ErrUnavailable
 	}
-	return f.launcher.Command(ctx, isolation, processisolation.CommandSpec{
+	cmd, err := f.launcher.Command(ctx, isolation, processisolation.CommandSpec{
 		Executable: executable, Arguments: arguments, WorkingDirectory: root,
 		PermittedRoot: root, RootWritable: rootWritable, Environment: environment,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", agentdomain.ErrUnavailable, err)
+	}
+	return cmd, nil
 }
