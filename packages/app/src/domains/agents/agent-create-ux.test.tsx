@@ -54,7 +54,7 @@ describe("Agent creation form task focus and errors", () => {
     fireEvent.change(root, { target: { value: "   " } });
     expect(screen.getByRole("alert").textContent).toContain("Enter an absolute workspace directory");
     fireEvent.change(root, { target: { value: "   /tmp/agent-folder   " } });
-    expect(screen.queryByText("Enter an absolute workspace directory starting with /.")).toBeNull();
+    expect(screen.queryByText("Enter an absolute workspace directory.")).toBeNull();
     fireEvent.click(advanced!.querySelector("summary")!);
     fireEvent.change(screen.getByRole("textbox", { name: "Default model (optional)" }), {
       target: { value: "  available-model  " },
@@ -105,6 +105,16 @@ describe("Agent creation form task focus and errors", () => {
     show();
     expect(screen.getByText("第 1 / 2 步")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "工作目录" }), { target: { value: "abc" } });
-    expect(screen.getByRole("alert").textContent).toContain("请输入以 / 开头的工作目录绝对路径");
+    expect(screen.getByRole("alert").textContent).toContain("请输入工作目录绝对路径");
+  });
+
+  it("accepts Windows drive-letter paths as valid absolute workspaces", () => {
+    show();
+    fireEvent.change(screen.getByRole("textbox", { name: "Agent name" }), { target: { value: "Windows Agent" } });
+    const root = screen.getByRole("textbox", { name: "Workspace directory" });
+    fireEvent.change(root, { target: { value: "D:\\Mender" } });
+    expect(root.getAttribute("aria-invalid")).toBe("false");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review" }).disabled).toBe(false);
   });
 });

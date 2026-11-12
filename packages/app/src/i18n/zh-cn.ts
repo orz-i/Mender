@@ -444,7 +444,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "This Agent could not be found.": "未找到此智能体。",
   "Workspace directory": "工作目录",
   "Enter an agent name, not just spaces.": "请输入智能体名称，不能仅包含空格。",
-  "Enter an absolute workspace directory starting with /.": "请输入以 / 开头的工作目录绝对路径。",
+  "Enter an absolute workspace directory.": "请输入工作目录绝对路径。",
   "Step {{step}} of {{total}}": "第 {{step}} / {{total}} 步",
   "Agent backend": "智能体后端",
   "Codex CLI requires the separately installed codex-acp adapter.": "Codex CLI 需要另行安装 codex-acp 适配器。",

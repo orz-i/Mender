@@ -222,4 +222,20 @@ describe("Agent owner-approved local workspace editor",()=>{
   expect(unbind).toHaveBeenCalledWith(agent.agentId,"gaoge");
  });
 
+ it("detects Windows duplicate default workspace with different slashes or casing", async () => {
+  const winAgent: Agent = {
+   ...agent,
+   workspaceRoot: "D:\\Mender",
+  };
+  const client = {
+   listAgentWorkspaces: vi.fn().mockResolvedValue({ workspaces: [] }),
+   listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
+  } as unknown as ManagementClient;
+  render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={winAgent} /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("button", { name: "Add workspace" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Workspace key" }), { target: { value: "secondary" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Workspace directory" }), { target: { value: "d:/mender/" } });
+  expect(screen.getByRole("alert").textContent).toContain("already the Agent's default workspace");
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Confirm" }).disabled).toBe(true);
+ });
 });

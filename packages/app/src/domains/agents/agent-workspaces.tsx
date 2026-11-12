@@ -9,6 +9,9 @@ import {t} from "../../i18n/i18n";
 import {useDesktopHost} from "../../shell/desktop-host-context";
 import {errorMessage} from "../../shared/errors";
 import {ErrorNotice,EmptyState} from "../../shared/page";
+import {
+  comparableWorkspacePath, defaultWorkspacePlaceholder, isAbsoluteWorkspacePath,
+} from "../../shared/workspace-paths";
 import {ResultPanel} from "../../shared/page-toolbar";
 import {EmptyPanelState} from "../../shared/workbench";
 
@@ -16,9 +19,6 @@ type Action={kind:"add"}|{kind:"grant";key:string}|{kind:"remove";key:string}|{k
 
 // Client-side comparison is only for immediate feedback. The owner service
 // resolves symlinks/canonical paths and SQLite rejects races authoritatively.
-function comparablePath(value:string):string{
- return value.trim().replace(/\/+$/u,"")||"/";
-}
 function registrationErrorMessage(reason:unknown):string{
  const code=reason instanceof MenderApiError?reason.code:
   reason instanceof Error?reason.message:
@@ -89,11 +89,11 @@ export function AgentWorkspaceSettings({
   }catch(e){setError(errorMessage(e));}
  }
  const validAlias=/^[a-z0-9_-]{1,64}$/.test(key)&&key!=="default";
- const validRoot=root.trim().startsWith("/")&&root.trim().length>1;
+ const validRoot=isAbsoluteWorkspacePath(root);
  const aliasDuplicate=validAlias&&items.some(w=>w.key===key);
- const comparableRoot=comparablePath(root);
- const defaultDuplicate=validRoot&&comparableRoot===comparablePath(agent.workspaceRoot);
- const registeredDirectory=validRoot?items.find(w=>comparablePath(w.workspaceRoot)===comparableRoot):undefined;
+ const comparableRoot=comparableWorkspacePath(root);
+ const defaultDuplicate=validRoot&&comparableRoot===comparableWorkspacePath(agent.workspaceRoot);
+ const registeredDirectory=validRoot?items.find(w=>comparableWorkspacePath(w.workspaceRoot)===comparableRoot):undefined;
  const availableProfiles=action?.kind==="grant"?profiles.filter(p=>
   !items.find(w=>w.key===action.key)?.profileIds.includes(p.profileId)
  ):[];
@@ -183,7 +183,7 @@ export function AgentWorkspaceSettings({
       <Input id="agent-workspace-root" className="min-w-0 flex-1" value={root}
        aria-invalid={!!root&&(!validRoot||defaultDuplicate||!!registeredDirectory)}
        aria-describedby={root&&(!validRoot||defaultDuplicate||registeredDirectory)?"agent-workspace-root-error":undefined}
-       onChange={e=>{setRoot(e.target.value);setError("");}} placeholder="/Users/example/project"/>
+       onChange={e=>{setRoot(e.target.value);setError("");}} placeholder={defaultWorkspacePlaceholder()}/>
       {chooseLocalDirectory?<Button variant="outline" onClick={()=>void choose()}>{t("Choose local directory")}</Button>:null}
      </div>
      {root&&(!validRoot||defaultDuplicate||registeredDirectory)?<p id="agent-workspace-root-error" role="alert" className="text-xs text-destructive">

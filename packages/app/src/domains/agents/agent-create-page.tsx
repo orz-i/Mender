@@ -10,6 +10,9 @@ import { ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 import {
+  defaultWorkspacePlaceholder, isAbsoluteWorkspacePath,
+} from "../../shared/workspace-paths";
+import {
   agentBackendForPluginId, agentBackendLabel, type AgentBackend,
 } from "./agent-backends";
 
@@ -61,8 +64,8 @@ function AgentCreateForm({
   const trimmedName=name.trim();
   const trimmedRoot=root.trim();
   const invalidName=name.length>0&&trimmedName.length===0;
-  const invalidRoot=root.length>0&&!trimmedRoot.startsWith("/");
-  const valid=trimmedName.length>0&&trimmedName.length<=120&&trimmedRoot.startsWith("/");
+  const invalidRoot=root.length>0&&!isAbsoluteWorkspacePath(trimmedRoot);
+  const valid=trimmedName.length>0&&trimmedName.length<=120&&isAbsoluteWorkspacePath(trimmedRoot);
   const stepNumber=step==="configure"?1:2;
   const totalSteps=2;
 
@@ -101,10 +104,10 @@ function AgentCreateForm({
             <div className="flex flex-wrap gap-2"><Input id="agent-root" value={root}
               aria-invalid={invalidRoot} aria-describedby={invalidRoot?"agent-root-error":undefined}
               onChange={e=>{setRoot(e.target.value);setError("");}}
-              placeholder="/Users/example/project" className="min-w-[12rem] flex-1"/>
+              placeholder={defaultWorkspacePlaceholder()} className="min-w-[12rem] flex-1"/>
               {chooseLocalDirectory?<Button variant="outline" onClick={()=>void choose()}>{t("Choose local directory")}</Button>:null}
             </div>
-            {invalidRoot?<p id="agent-root-error" role="alert" className="text-xs text-destructive">{t("Enter an absolute workspace directory starting with /.")}</p>:null}
+            {invalidRoot?<p id="agent-root-error" role="alert" className="text-xs text-destructive">{t("Enter an absolute workspace directory.")}</p>:null}
             {error?<p role="alert" className="text-xs text-destructive">{error}</p>:null}
           </div>
           <details open={modelSettingsOpen} className="rounded-xl border border-border/70">
