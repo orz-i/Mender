@@ -138,10 +138,12 @@
 
   .app-drag-region {
     -webkit-app-region: drag;
+    --wails-draggable: drag;
   }
 
   .app-no-drag {
     -webkit-app-region: no-drag;
+    --wails-draggable: no-drag;
   }
 
   [data-platform="desktop"] ::-webkit-scrollbar {

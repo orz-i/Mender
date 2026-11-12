@@ -257,6 +257,10 @@ export function WorkbenchShell({
       <header
         data-slot="workbench-titlebar"
         className="app-drag-region flex h-[38px] shrink-0 items-center justify-between border-b border-border/75 bg-card/75 px-3 text-xs backdrop-blur"
+        onDoubleClick={(e) => {
+          if ((e.target as HTMLElement).closest(".app-no-drag")) return;
+          void controls?.toggleMaximise?.();
+        }}
       >
         <div className="app-no-drag flex items-center gap-2">
           <Link

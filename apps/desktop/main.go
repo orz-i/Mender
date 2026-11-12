@@ -95,12 +95,15 @@ func run() error {
 		MinWidth:  960,
 		MinHeight: 640,
 		URL:       startupURL,
+		Frameless: true,
 		Windows: application.WindowsWindow{
-			NonClientRegionSupport: true,
+			NonClientRegionSupport:            true,
+			DisableFramelessWindowDecorations: false,
 		},
 		Mac: application.MacWindow{
 			TitleBar: application.MacTitleBar{
 				FullSizeContent: true,
+				Hide:            true,
 			},
 		},
 	})
