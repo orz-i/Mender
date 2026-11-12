@@ -1,6 +1,7 @@
 package binding
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -325,6 +326,70 @@ func (s *Service) GetAgentTaskTranscript(taskId string) (AgentTaskTranscript, er
 		})
 	}
 	return out, nil
+}
+func (s *Service) GetAgentTaskEvents(taskId string, afterSeq int64) (AgentTaskTranscript, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentTaskTranscript{}, err
+	}
+	parsed, err := agentdomain.ParseTaskID(taskId)
+	if err != nil {
+		return AgentTaskTranscript{}, err
+	}
+	events, err := s.runtime.Agents.GetTaskTranscript(s.ctx, parsed, caller)
+	if err != nil {
+		return AgentTaskTranscript{}, err
+	}
+	filtered := make([]AgentTaskEvent, 0, len(events))
+	for _, e := range events {
+		if e.Seq > afterSeq {
+			filtered = append(filtered, AgentTaskEvent{
+				EventID:   string(e.ID),
+				TaskID:    string(e.TaskID),
+				Seq:       e.Seq,
+				Type:      string(e.Type),
+				Payload:   e.Payload,
+				CreatedAt: e.CreatedAt.UTC().Format(time.RFC3339Nano),
+			})
+		}
+	}
+	if len(filtered) > 0 {
+		return AgentTaskTranscript{Events: filtered}, nil
+	}
+
+	task, err := s.runtime.Agents.Task(s.ctx, parsed, caller)
+	if err != nil || task.Status.Terminal() {
+		return AgentTaskTranscript{Events: []AgentTaskEvent{}}, nil
+	}
+
+	subCtx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+	defer cancel()
+	eventsChan, unsubscribe, err := s.runtime.Agents.SubscribeTaskEvents(subCtx, parsed, caller)
+	if err != nil {
+		return AgentTaskTranscript{Events: []AgentTaskEvent{}}, nil
+	}
+	defer unsubscribe()
+
+	select {
+	case <-subCtx.Done():
+		return AgentTaskTranscript{Events: []AgentTaskEvent{}}, nil
+	case ev, ok := <-eventsChan:
+		if !ok || ev.Seq <= afterSeq {
+			return AgentTaskTranscript{Events: []AgentTaskEvent{}}, nil
+		}
+		return AgentTaskTranscript{
+			Events: []AgentTaskEvent{
+				{
+					EventID:   string(ev.ID),
+					TaskID:    string(ev.TaskID),
+					Seq:       ev.Seq,
+					Type:      string(ev.Type),
+					Payload:   ev.Payload,
+					CreatedAt: ev.CreatedAt.UTC().Format(time.RFC3339Nano),
+				},
+			},
+		}, nil
+	}
 }
 func (s *Service) CancelAgentTask(id string) (AgentCancelReceipt, error) {
 	caller, err := s.agentOwnerContext()

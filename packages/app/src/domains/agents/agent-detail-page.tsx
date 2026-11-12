@@ -132,6 +132,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
       (previous.status!==current.status||previous.result!==current.result||
        previous.diagnostic!==current.diagnostic)?current:previous);
   },[]);
+  const [hasInlineApproval, setHasInlineApproval] = useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [modelDraft,setModelDraft]=useState("");
   const [effortDraft,setEffortDraft]=useState("");
@@ -528,7 +529,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
       </DialogFooter></DialogContent>
     </Dialog>
 
-    <Dialog open={viewTask!==null} onOpenChange={open=>{if(!open)setViewTask(null)}}>
+    <Dialog open={viewTask!==null} onOpenChange={open=>{if(!open){setViewTask(null);setHasInlineApproval(false);}}}>
       <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("Agent task result")}</DialogTitle>
@@ -540,7 +541,15 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
         {viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("Unknown does not mean the task succeeded or failed. Review actual deliverables before planning any new task; do not retry the original prompt automatically.")}</p>:null}
-        {viewTask ? <TaskConversationFeed task={viewTask} client={client} /> : null}
+        {viewTask ? (
+          <TaskConversationFeed
+            task={viewTask}
+            client={client}
+            approvals={approvals}
+            onTaskUpdated={updateViewedTask}
+            onHasInlineApproval={setHasInlineApproval}
+          />
+        ) : null}
         <details className="rounded-xl border border-border/70">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{t("Execution details")}</summary>
           <div className="space-y-4 border-t border-border/70 p-4">
@@ -570,7 +579,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         </section>:viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
           </div>
         </details>
-        {approvals&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
+        {approvals&&!hasInlineApproval&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} approvals={approvals} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
           {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals are voluntary requests made by the Agent and do not form a complete record of native file and shell activity; zero approvals does not prove that no operations occurred.")}

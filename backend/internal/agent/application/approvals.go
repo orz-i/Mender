@@ -15,8 +15,9 @@ type ApprovalService struct {
 	*taskAccess
 	*runtimeCoordinator
 	*localWorkspaceRules
-	store ApprovalRepository
-	admit Admission
+	store       ApprovalRepository
+	admit       Admission
+	recordEvent func(context.Context, agentdomain.TaskEvent) error
 }
 
 const ApprovalWaitLimit = 2 * time.Minute
@@ -101,6 +102,20 @@ func (s *ApprovalService) requestPermission(ctx context.Context, task agentdomai
 	}()
 	if err := s.store.CreateApproval(ctx, a); err != nil {
 		return none, err
+	}
+	if s.recordEvent != nil {
+		_ = s.recordEvent(ctx, agentdomain.TaskEvent{
+			TaskID: task.ID,
+			Type:   agentdomain.TaskEventApproval,
+			Payload: map[string]any{
+				"approvalId": string(approvalID),
+				"target":     a.Target,
+				"kind":       a.Kind,
+				"status":     "pending",
+				"expiresAt":  a.ExpiresAt.Format(time.RFC3339),
+				"toolCallId": a.ToolCallID,
+			},
+		})
 	}
 	timer := time.NewTimer(time.Until(limit))
 	defer timer.Stop()
@@ -207,6 +222,25 @@ func (s *ApprovalService) DecideApproval(ctx context.Context, id agentdomain.App
 	}
 	approval.Status = status
 	approval.ResolvedAt = time.Now().UTC()
+	if s.recordEvent != nil {
+		decidedStatus := "rejected"
+		if choice == agentdomain.ApprovalAllowOnce {
+			decidedStatus = "allowed"
+		}
+		_ = s.recordEvent(ctx, agentdomain.TaskEvent{
+			TaskID: task.ID,
+			Type:   agentdomain.TaskEventApproval,
+			Payload: map[string]any{
+				"approvalId": string(id),
+				"target":     approval.Target,
+				"kind":       approval.Kind,
+				"status":     decidedStatus,
+				"decision":   decidedStatus,
+				"choice":     string(choice),
+				"toolCallId": approval.ToolCallID,
+			},
+		})
+	}
 	return approval, nil
 }
 func approvalCaller(task agentdomain.Task) (gov.Context, error) {

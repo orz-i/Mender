@@ -220,6 +220,10 @@ export function GetAgentTask(id: string): $CancellablePromise<$models.AgentTask>
     return $Call.ByID(1156608320, id);
 }
 
+export function GetAgentTaskEvents(taskId: string, afterSeq: number): $CancellablePromise<$models.AgentTaskTranscript> {
+    return $Call.ByID(3068092929, taskId, afterSeq);
+}
+
 export function GetAgentTaskTranscript(taskId: string): $CancellablePromise<$models.AgentTaskTranscript> {
     return $Call.ByID(3770279778, taskId);
 }

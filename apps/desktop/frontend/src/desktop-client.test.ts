@@ -187,6 +187,32 @@ describe("desktop Mender client", () => {
     expect(result.events[0]?.payload.prompt).toBe("test prompt");
   });
 
+  it("subscribes to Agent task events via desktop client", async () => {
+    const client = createDesktopMenderClient();
+    vi.mocked(Service.GetAgentTaskTranscript).mockResolvedValue({
+      events: [
+        {
+          eventId: "evt_1",
+          taskId: "atask_123",
+          seq: 1,
+          type: "user_prompt",
+          payload: { prompt: "test prompt" },
+          createdAt: "2026-11-12T10:00:00Z",
+        },
+      ],
+    });
+    const received: any[] = [];
+    const unsubscribe = client.subscribeAgentTaskEvents("atask_123", (ev) => {
+      received.push(ev);
+    });
+    // Wait for the initial poll
+    await new Promise((r) => setTimeout(r, 50));
+    unsubscribe();
+    expect(received).toHaveLength(1);
+    expect(received[0]?.eventId).toBe("evt_1");
+    expect(received[0]?.type).toBe("user_prompt");
+  });
+
   it("forwards SSH key import-only passphrases through Wails without persisting them in returned metadata", async () => {
     const stored = {
       reference: "credential://ssh/rocky",

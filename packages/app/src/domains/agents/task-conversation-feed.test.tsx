@@ -219,4 +219,265 @@ describe("TaskConversationFeed", () => {
     expect(screen.getByText("Permission denied")).toBeTruthy();
     expect(screen.getByText("Task failed")).toBeTruthy();
   });
+
+  it("subscribes to live events when task is running and smoothly merges thinking and message chunks", async () => {
+    let capturedOnEvent: ((event: AgentTaskEvent) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const subscribeMock = vi.fn().mockImplementation((_taskId, onEvent) => {
+      capturedOnEvent = onEvent;
+      return unsubscribe;
+    });
+
+    const initialEvents: AgentTaskEvent[] = [
+      {
+        eventId: "evt_prompt",
+        taskId: mockTask.taskId,
+        seq: 1,
+        type: "user_prompt",
+        payload: { prompt: "Start live streaming task" },
+        createdAt: "2026-11-12T10:00:00Z",
+      },
+    ];
+
+    const client = {
+      getAgentTaskTranscript: vi.fn().mockResolvedValue({ events: initialEvents }),
+      subscribeAgentTaskEvents: subscribeMock,
+    };
+
+    const runningTask: AgentTask = {
+      ...mockTask,
+      status: "running",
+    };
+
+    const { unmount } = render(<TaskConversationFeed task={runningTask} client={client} />);
+
+    expect(await screen.findByText("Start live streaming task")).toBeTruthy();
+    expect(subscribeMock).toHaveBeenCalledWith(runningTask.taskId, expect.any(Function), expect.any(Function));
+    expect(capturedOnEvent).toBeDefined();
+
+    // Stream two thinking chunks
+    capturedOnEvent!({
+      eventId: "evt_think_1",
+      taskId: runningTask.taskId,
+      seq: 2,
+      type: "thinking",
+      payload: { thought: "Thinking " },
+      createdAt: "2026-11-12T10:00:01Z",
+    });
+
+    capturedOnEvent!({
+      eventId: "evt_think_2",
+      taskId: runningTask.taskId,
+      seq: 3,
+      type: "thinking",
+      payload: { thought: "step by step..." },
+      createdAt: "2026-11-12T10:00:02Z",
+    });
+
+    // Thinking process merges smoothly into one block
+    expect(await screen.findByText("Thinking step by step...")).toBeTruthy();
+
+    // Stream message chunks
+    capturedOnEvent!({
+      eventId: "evt_chunk_1",
+      taskId: runningTask.taskId,
+      seq: 4,
+      type: "message_chunk",
+      payload: { text: "Hello " },
+      createdAt: "2026-11-12T10:00:03Z",
+    });
+
+    capturedOnEvent!({
+      eventId: "evt_chunk_2",
+      taskId: runningTask.taskId,
+      seq: 5,
+      type: "message_chunk",
+      payload: { text: "world! Real-time streaming works." },
+      createdAt: "2026-11-12T10:00:04Z",
+    });
+
+    // Assistant message bubble smoothly merges chunks
+    expect(await screen.findByText("Hello world! Real-time streaming works.")).toBeTruthy();
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it("handles smart auto-scroll and reveals floating button when scrolled up", async () => {
+    let capturedOnEvent: ((event: AgentTaskEvent) => void) | undefined;
+    const initialEvents: AgentTaskEvent[] = [
+      {
+        eventId: "evt_prompt_0",
+        taskId: mockTask.taskId,
+        seq: 1,
+        type: "user_prompt",
+        payload: { prompt: "Hello" },
+        createdAt: "2026-11-12T10:00:00Z",
+      },
+    ];
+    const client = {
+      getAgentTaskTranscript: vi.fn().mockResolvedValue({ events: initialEvents }),
+      subscribeAgentTaskEvents: vi.fn().mockImplementation((_taskId, onEvent) => {
+        capturedOnEvent = onEvent;
+        return vi.fn();
+      }),
+    };
+
+    const runningTask: AgentTask = {
+      ...mockTask,
+      status: "running",
+    };
+
+    const { container } = render(<TaskConversationFeed task={runningTask} client={client} />);
+
+    // Wait for initial prompt to render
+    expect(await screen.findByText("Hello")).toBeTruthy();
+
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLDivElement;
+    expect(scrollContainer).toBeTruthy();
+
+    // Mock dimensions to simulate user scrolling up away from bottom
+    Object.defineProperty(scrollContainer, "scrollHeight", { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 100, configurable: true, writable: true });
+
+    fireEvent.scroll(scrollContainer);
+
+    // Incoming new event while user is scrolled up
+    capturedOnEvent!({
+      eventId: "evt_new_msg",
+      taskId: runningTask.taskId,
+      seq: 2,
+      type: "message_chunk",
+      payload: { text: "Incoming background stream text" },
+      createdAt: "2026-11-12T10:00:01Z",
+    });
+
+    // Floating "New messages" button should appear
+    const newMsgBtn = await screen.findByRole("button", { name: "New messages" });
+    expect(newMsgBtn).toBeTruthy();
+
+    // Clicking the floating button triggers scroll to bottom and hides button
+    fireEvent.click(newMsgBtn);
+    expect(screen.queryByRole("button", { name: "New messages" })).toBeNull();
+  });
+
+  it("renders interactive inline approvals and handles Allow Once decision", async () => {
+    const events: AgentTaskEvent[] = [
+      {
+        eventId: "evt_approval_1",
+        taskId: mockTask.taskId,
+        seq: 1,
+        type: "approval",
+        payload: {
+          approvalId: "app_perm_1",
+          target: "/workspace/config.ts",
+          kind: "edit",
+          status: "pending",
+        },
+        createdAt: "2026-11-12T10:00:01Z",
+      },
+    ];
+
+    const client = {
+      getAgentTaskTranscript: vi.fn().mockResolvedValue({ events }),
+    };
+
+    const approvals = {
+      decideAgentApproval: vi.fn().mockResolvedValue({
+        approvalId: "app_perm_1",
+        status: "allowed_once",
+      }),
+      listAgentApprovals: vi.fn().mockResolvedValue({ approvals: [] }),
+    };
+
+    const onTaskUpdated = vi.fn();
+    const onHasInlineApproval = vi.fn();
+
+    render(
+      <TaskConversationFeed
+        task={{ ...mockTask, status: "running" }}
+        client={client}
+        approvals={approvals}
+        onTaskUpdated={onTaskUpdated}
+        onHasInlineApproval={onHasInlineApproval}
+      />,
+    );
+
+    expect(await screen.findByText("Approval requested")).toBeTruthy();
+    expect(screen.getByText("/workspace/config.ts")).toBeTruthy();
+    expect(screen.getByText("Awaiting owner approval")).toBeTruthy();
+
+    // Verify onHasInlineApproval was notified
+    expect(onHasInlineApproval).toHaveBeenCalledWith(true);
+
+    const allowBtn = screen.getByRole("button", { name: "Allow once" });
+    const rejectBtn = screen.getByRole("button", { name: "Reject" });
+    expect(allowBtn).toBeTruthy();
+    expect(rejectBtn).toBeTruthy();
+
+    fireEvent.click(allowBtn);
+
+    await waitFor(() => {
+      expect(approvals.decideAgentApproval).toHaveBeenCalledWith("app_perm_1", "allow_once");
+    });
+
+    // Transitions to granted state
+    expect(await screen.findByText("Approval granted")).toBeTruthy();
+    expect(onTaskUpdated).toHaveBeenCalled();
+  });
+
+  it("handles inline approvals Reject decision", async () => {
+    const events: AgentTaskEvent[] = [
+      {
+        eventId: "evt_approval_2",
+        taskId: mockTask.taskId,
+        seq: 1,
+        type: "approval",
+        payload: {
+          approvalId: "app_perm_2",
+          target: "/bin/destructive",
+          kind: "execute",
+          status: "pending",
+        },
+        createdAt: "2026-11-12T10:00:01Z",
+      },
+    ];
+
+    const client = {
+      getAgentTaskTranscript: vi.fn().mockResolvedValue({ events }),
+    };
+
+    const approvals = {
+      decideAgentApproval: vi.fn().mockResolvedValue({
+        approvalId: "app_perm_2",
+        status: "rejected",
+      }),
+      listAgentApprovals: vi.fn().mockResolvedValue({ approvals: [] }),
+    };
+
+    const onTaskUpdated = vi.fn();
+
+    render(
+      <TaskConversationFeed
+        task={{ ...mockTask, status: "running" }}
+        client={client}
+        approvals={approvals}
+        onTaskUpdated={onTaskUpdated}
+      />,
+    );
+
+    expect(await screen.findByText("Approval requested")).toBeTruthy();
+    const rejectBtn = screen.getByRole("button", { name: "Reject" });
+
+    fireEvent.click(rejectBtn);
+
+    await waitFor(() => {
+      expect(approvals.decideAgentApproval).toHaveBeenCalledWith("app_perm_2", "reject");
+    });
+
+    // Transitions to rejected state
+    expect(await screen.findByText("Approval rejected")).toBeTruthy();
+    expect(onTaskUpdated).toHaveBeenCalled();
+  });
 });

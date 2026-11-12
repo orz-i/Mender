@@ -1,4 +1,5 @@
 import { MenderClientInvariantError } from "@mender/sdk";
+import { Events } from "@wailsio/runtime";
 import type {
   AuditRecord,
   ProviderActivationAuditRecord,
@@ -474,6 +475,61 @@ export function createDesktopMenderClient(): ManagementClient {
     async getAgentTaskTranscript(taskId) {
       const result = await Service.GetAgentTaskTranscript(taskId);
       return { events: (result.events ?? []).map(agentTaskEvent) };
+    },
+    subscribeAgentTaskEvents(taskId, onEvent, onError) {
+      let active = true;
+      let lastSeq = 0;
+      let cleanupEvents: (() => void) | undefined;
+
+      try {
+        if (typeof Events?.On === "function") {
+          cleanupEvents = Events.On(`agent_task_event:${taskId}`, (ev: any) => {
+            if (!active) return;
+            const data = ev?.data ?? ev;
+            if (data && typeof data === "object") {
+              const mapped = agentTaskEvent(data);
+              if (mapped.seq > lastSeq) {
+                lastSeq = mapped.seq;
+                onEvent(mapped);
+              }
+            }
+          });
+        }
+      } catch {
+        // Fallback if Events.On is unavailable
+      }
+
+      const poll = async () => {
+        if (!active) return;
+        try {
+          const result = await Service.GetAgentTaskTranscript(taskId);
+          if (!active) return;
+          const events = (result.events ?? []).map(agentTaskEvent);
+          for (const ev of events) {
+            if (ev.seq > lastSeq) {
+              lastSeq = ev.seq;
+              onEvent(ev);
+              if (ev.type === "terminal") {
+                active = false;
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          if (active) onError?.(err);
+        }
+      };
+
+      void poll();
+      const interval = setInterval(() => {
+        void poll();
+      }, 1000);
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+        cleanupEvents?.();
+      };
     },
     async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
     async listAgentGrants(agentId){

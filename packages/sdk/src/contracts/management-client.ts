@@ -238,6 +238,11 @@ export interface ManagementClient {
   listAgentAdmissions(agentId:string):Promise<{events:AgentAdmissionEvent[]}>;
   getAgentTask(taskId:string): Promise<AgentTask>;
   getAgentTaskTranscript(taskId: string): Promise<{ events: AgentTaskEvent[] }>;
+  subscribeAgentTaskEvents(
+    taskId: string,
+    onEvent: (event: AgentTaskEvent) => void,
+    onError?: (err: unknown) => void,
+  ): () => void;
   cancelAgentTask(taskId:string): Promise<AgentCancelReceipt>;
   listAgentGrants(agentId:string): Promise<AgentGrants>;
   grantAgentProfile(agentId:string,profileId:string): Promise<void>;

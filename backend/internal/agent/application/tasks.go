@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -51,10 +52,12 @@ type TaskService struct {
 	*taskAccess
 	*runtimeCoordinator
 	*localWorkspaceRules
-	store     TaskRepository
-	runner    Executor
-	admit     Admission
-	approvals nativeApprovalUseCases
+	store       TaskRepository
+	runner      Executor
+	admit       Admission
+	approvals   nativeApprovalUseCases
+	broadcaster *TaskEventBroadcaster
+	taskSeqs    sync.Map
 }
 
 type SubmitOptions struct {
@@ -159,7 +162,7 @@ func (s *TaskService) SubmitWithOptions(ctx context.Context, id agentdomain.ID, 
 		return agentdomain.Task{}, err
 	}
 	if evtID, err := agentdomain.NewTaskEventID(); err == nil {
-		_ = s.store.RecordTaskEvent(ctx, agentdomain.TaskEvent{
+		_ = s.RecordTaskEvent(ctx, agentdomain.TaskEvent{
 			ID:        evtID,
 			TaskID:    taskID,
 			Seq:       1,
@@ -210,18 +213,9 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 		delete(s.active, task.ID)
 		s.mu.Unlock()
 	}()
-	var eventSeq atomic.Int64
-	eventSeq.Store(1) // user_prompt was seq 1
 	recordEvent := func(eventType agentdomain.TaskEventType, payload map[string]any) error {
-		evtID, err := agentdomain.NewTaskEventID()
-		if err != nil {
-			return err
-		}
-		curSeq := eventSeq.Add(1)
-		return s.store.RecordTaskEvent(context.WithoutCancel(ctx), agentdomain.TaskEvent{
-			ID:        evtID,
+		return s.RecordTaskEvent(context.WithoutCancel(ctx), agentdomain.TaskEvent{
 			TaskID:    task.ID,
-			Seq:       curSeq,
 			Type:      eventType,
 			Payload:   payload,
 			CreatedAt: time.Now().UTC(),
@@ -261,23 +255,7 @@ func (s *TaskService) run(ctx context.Context, cancel context.CancelFunc, agent 
 		},
 		RecordEvent: recordEvent,
 		PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
-			_ = recordEvent(agentdomain.TaskEventApproval, map[string]any{
-				"toolCallId": req.ToolCallID,
-				"kind":       req.Kind,
-				"target":     req.Target,
-				"canAllow":   req.CanAllow,
-				"phase":      "requested",
-			})
-			decision, decErr := s.approvals.requestPermission(ctx, task, caller, req)
-			if decErr == nil {
-				_ = recordEvent(agentdomain.TaskEventApproval, map[string]any{
-					"toolCallId": req.ToolCallID,
-					"choice":     string(decision.Choice),
-					"policy":     decision.AuthorizedByPolicy,
-					"phase":      "decided",
-				})
-			}
-			return decision, decErr
+			return s.approvals.requestPermission(ctx, task, caller, req)
 		}}
 	// Runtime heartbeat reports only that this task's local supervisory worker
 	// remains alive. It is separate from native Agent progress or completion
@@ -471,8 +449,75 @@ func (s *TaskService) Close() error {
 	return nil
 }
 
+func (s *TaskService) nextEventSeq(ctx context.Context, taskID agentdomain.TaskID) int64 {
+	val, loaded := s.taskSeqs.Load(taskID)
+	if !loaded {
+		var maxSeq int64
+		if events, err := s.store.ListTaskEvents(ctx, taskID); err == nil && len(events) > 0 {
+			maxSeq = events[len(events)-1].Seq
+		}
+		seq := &atomic.Int64{}
+		seq.Store(maxSeq)
+		actual, _ := s.taskSeqs.LoadOrStore(taskID, seq)
+		val = actual
+	}
+	return val.(*atomic.Int64).Add(1)
+}
+
+func (s *TaskService) trackEventSeq(taskID agentdomain.TaskID, seq int64) {
+	val, _ := s.taskSeqs.LoadOrStore(taskID, &atomic.Int64{})
+	counter := val.(*atomic.Int64)
+	for {
+		curr := counter.Load()
+		if seq <= curr {
+			break
+		}
+		if counter.CompareAndSwap(curr, seq) {
+			break
+		}
+	}
+}
+
 func (s *TaskService) RecordTaskEvent(ctx context.Context, event agentdomain.TaskEvent) error {
-	return s.store.RecordTaskEvent(ctx, event)
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now().UTC()
+	}
+	if event.ID == "" {
+		id, err := agentdomain.NewTaskEventID()
+		if err != nil {
+			return err
+		}
+		event.ID = id
+	}
+	if event.Seq <= 0 {
+		event.Seq = s.nextEventSeq(ctx, event.TaskID)
+	} else {
+		s.trackEventSeq(event.TaskID, event.Seq)
+	}
+	if err := s.store.RecordTaskEvent(ctx, event); err != nil {
+		return err
+	}
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast(event)
+	}
+	return nil
+}
+
+func (s *TaskService) SubscribeTaskEvents(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (<-chan agentdomain.TaskEvent, func(), error) {
+	if _, _, err := s.authorizedTask(ctx, id, caller); err != nil {
+		return nil, nil, err
+	}
+	if s.broadcaster == nil {
+		return nil, nil, agentdomain.ErrUnavailable
+	}
+	ch, unsub := s.broadcaster.Subscribe(id)
+	go func() {
+		select {
+		case <-ctx.Done():
+			unsub()
+		}
+	}()
+	return ch, unsub, nil
 }
 
 func (s *TaskService) GetTaskTranscript(ctx context.Context, id agentdomain.TaskID, caller gov.Context) ([]agentdomain.TaskEvent, error) {

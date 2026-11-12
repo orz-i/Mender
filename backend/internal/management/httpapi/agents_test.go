@@ -1,11 +1,14 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -122,7 +125,9 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	}
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/atask_00000000000000000000000000000000", nil, http.StatusNotFound)
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/atask_00000000000000000000000000000000/transcript", nil, http.StatusNotFound)
+	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/atask_00000000000000000000000000000000/events", nil, http.StatusNotFound)
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/invalid/transcript", nil, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/invalid/events", nil, http.StatusBadRequest)
 	requestJSON(t, server.Client(), http.MethodPost, api+"/agent-tasks/invalid/cancel", nil, http.StatusBadRequest)
 	// Denied Agent Policy operations must be independently auditable through
 	// the owner-only API, without exporting PrincipalRefs or task prompts.
@@ -152,4 +157,94 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	}
 	requestJSON(t, server.Client(), http.MethodDelete, api+"/agents/"+id, nil, http.StatusNoContent)
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id, nil, http.StatusNotFound)
+}
+
+func TestAgentTaskEventsSSE(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "agent-sse.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+
+	server := httptest.NewServer(New(runtime))
+	defer server.Close()
+
+	api := server.URL + "/api/v1"
+
+	// Create an agent
+	created := requestJSON(t, server.Client(), http.MethodPost, api+"/agents", map[string]any{
+		"name": "SSE Agent", "backend": "codex", "workspaceRoot": t.TempDir(), "isolation": "restricted_host",
+	}, http.StatusCreated)
+	agentID, err := agentdomain.ParseID(created["agentId"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	caller, err := gov.NewContext(gov.OriginCLI, runtime.OwnerPrincipal(), gov.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	task, err := runtime.Agents.Submit(ctx, agentID, "Prompt for SSE streaming", caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Request SSE stream
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api+"/agent-tasks/"+string(task.ID)+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("expected Content-Type text/event-stream, got %s", ct)
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-cache" {
+		t.Fatalf("expected Cache-Control no-cache, got %s", cc)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	var eventLines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			eventLines = append(eventLines, strings.TrimPrefix(line, "data: "))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scanner error: %v", err)
+	}
+
+	if len(eventLines) == 0 {
+		t.Fatal("expected at least one event from SSE stream")
+	}
+
+	// First event should be user_prompt
+	var firstEvt agentdomain.TaskEvent
+	if err := json.Unmarshal([]byte(eventLines[0]), &firstEvt); err != nil {
+		t.Fatalf("failed to parse first event: %v", err)
+	}
+	if firstEvt.Type != agentdomain.TaskEventUserPrompt {
+		t.Fatalf("expected first event to be user_prompt, got %s", firstEvt.Type)
+	}
+
+	// Last event should be terminal
+	var lastEvt agentdomain.TaskEvent
+	if err := json.Unmarshal([]byte(eventLines[len(eventLines)-1]), &lastEvt); err != nil {
+		t.Fatalf("failed to parse last event: %v", err)
+	}
+	if lastEvt.Type != agentdomain.TaskEventTerminal {
+		t.Fatalf("expected last event to be terminal, got %s", lastEvt.Type)
+	}
 }

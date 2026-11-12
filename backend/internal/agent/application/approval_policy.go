@@ -195,6 +195,21 @@ func (s *ApprovalService) AllowPendingWithCurrentPolicy(ctx context.Context, id 
 			if e != nil {
 				return count, e
 			}
+			if s.recordEvent != nil {
+				_ = s.recordEvent(ctx, agentdomain.TaskEvent{
+					TaskID: task.ID,
+					Type:   agentdomain.TaskEventApproval,
+					Payload: map[string]any{
+						"approvalId": string(a.ID),
+						"target":     a.Target,
+						"kind":       a.Kind,
+						"status":     "allowed",
+						"decision":   "allowed",
+						"choice":     string(agentdomain.ApprovalAllowOnce),
+						"toolCallId": a.ToolCallID,
+					},
+				})
+			}
 			count++
 		}
 		if len(pending) < batchSize {
@@ -251,6 +266,21 @@ func (s *ApprovalService) tryAutomaticApproval(ctx context.Context, task agentdo
 			return empty, false, nil
 		}
 		return empty, false, err
+	}
+	if s.recordEvent != nil {
+		_ = s.recordEvent(ctx, agentdomain.TaskEvent{
+			TaskID: task.ID,
+			Type:   agentdomain.TaskEventApproval,
+			Payload: map[string]any{
+				"approvalId": string(a.ID),
+				"target":     a.Target,
+				"kind":       a.Kind,
+				"status":     "allowed",
+				"decision":   "allowed",
+				"choice":     string(agentdomain.ApprovalAllowOnce),
+				"toolCallId": a.ToolCallID,
+			},
+		})
 	}
 	return PermissionDecision{Choice: agentdomain.ApprovalAllowOnce, AuthorizedByPolicy: true}, true, nil
 }

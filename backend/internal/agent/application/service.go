@@ -38,10 +38,25 @@ func NewService(store Repository, runner Executor, admit Admission, owner gov.Pr
 	authority := &agentAuthority{owner: owner, grants: store}
 	access := &taskAccess{agentAuthority: authority, store: store}
 	workspace := &localWorkspaceRules{workspace: verifier}
-	approvals := &ApprovalService{taskAccess: access, runtimeCoordinator: runtime,
-		localWorkspaceRules: workspace, store: store, admit: admit}
-	tasks := &TaskService{taskAccess: access, runtimeCoordinator: runtime,
-		localWorkspaceRules: workspace, store: store, runner: runner, admit: admit, approvals: approvals}
+	broadcaster := NewTaskEventBroadcaster()
+	tasks := &TaskService{
+		taskAccess:          access,
+		runtimeCoordinator:  runtime,
+		localWorkspaceRules: workspace,
+		store:               store,
+		runner:              runner,
+		admit:               admit,
+		broadcaster:         broadcaster,
+	}
+	approvals := &ApprovalService{
+		taskAccess:          access,
+		runtimeCoordinator:  runtime,
+		localWorkspaceRules: workspace,
+		store:               store,
+		admit:               admit,
+		recordEvent:         tasks.RecordTaskEvent,
+	}
+	tasks.approvals = approvals
 	inspector, _ := runner.(ModelInspector)
 	resources := &ResourceService{agentAuthority: authority, localWorkspaceRules: workspace,
 		store: store, inspector: inspector, profileExists: profileExists}
@@ -178,6 +193,10 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 
 func (s *Service) RecordTaskEvent(ctx context.Context, event agentdomain.TaskEvent) error {
 	return s.tasks.RecordTaskEvent(ctx, event)
+}
+
+func (s *Service) SubscribeTaskEvents(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (<-chan agentdomain.TaskEvent, func(), error) {
+	return s.tasks.SubscribeTaskEvents(ctx, id, caller)
 }
 
 func (s *Service) GetTaskTranscript(ctx context.Context, id agentdomain.TaskID, caller gov.Context) ([]agentdomain.TaskEvent, error) {

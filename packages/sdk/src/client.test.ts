@@ -727,4 +727,59 @@ describe("Mender SDK", () => {
     expect(events[0]?.type).toBe("user_prompt");
     expect(events[0]?.payload.prompt).toBe("Analyze project health");
   });
+
+  it("subscribes to Agent task events via EventSource", () => {
+    const originalEventSource = globalThis.EventSource;
+    let urlCaptured = "";
+    let closed = false;
+    let mockInstance: any = null;
+
+    class MockEventSource {
+      url: string;
+      onmessage: ((ev: any) => void) | null = null;
+      onerror: ((ev: any) => void) | null = null;
+      constructor(url: string) {
+        this.url = url;
+        urlCaptured = url;
+        mockInstance = this;
+      }
+      addEventListener(type: string, listener: any) {}
+      close() {
+        closed = true;
+      }
+    }
+    // @ts-expect-error mock
+    globalThis.EventSource = MockEventSource;
+
+    try {
+      const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1" });
+      const received: any[] = [];
+      const unsub = client.subscribeAgentTaskEvents("atask_001", (ev) => {
+        received.push(ev);
+      });
+
+      expect(urlCaptured).toBe("http://localhost:8080/api/v1/agent-tasks/atask_001/events");
+      expect(mockInstance).not.toBeNull();
+
+      // Simulate incoming event
+      mockInstance.onmessage({
+        data: JSON.stringify({
+          eventId: "evt_100",
+          taskId: "atask_001",
+          seq: 1,
+          type: "message_chunk",
+          payload: { text: "Streaming chunk" },
+          createdAt: "2026-11-12T10:00:00Z",
+        }),
+      });
+
+      expect(received).toHaveLength(1);
+      expect(received[0].payload.text).toBe("Streaming chunk");
+
+      unsub();
+      expect(closed).toBe(true);
+    } finally {
+      globalThis.EventSource = originalEventSource;
+    }
+  });
 });

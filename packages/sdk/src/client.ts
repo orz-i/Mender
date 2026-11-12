@@ -54,8 +54,9 @@ export interface MenderClientOptions {
 export function createMenderClient(
   options: MenderClientOptions = {},
 ): ManagementClient {
+  const baseUrl = options.baseUrl ?? "/api/v1";
   const client = createClient<paths>({
-    baseUrl: options.baseUrl ?? "/api/v1",
+    baseUrl,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
 
@@ -385,6 +386,40 @@ export function createMenderClient(
           params: { path: { taskId } },
         }),
       ) as { events: AgentTaskEvent[] };
+    },
+    subscribeAgentTaskEvents(
+      taskId: string,
+      onEvent: (event: AgentTaskEvent) => void,
+      onError?: (err: unknown) => void,
+    ): () => void {
+      const trimmedBase = baseUrl.replace(/\/$/, "");
+      const url = `${trimmedBase}/agent-tasks/${encodeURIComponent(taskId)}/events`;
+      if (typeof EventSource === "undefined") {
+        onError?.(new Error("EventSource is not supported in this environment"));
+        return () => {};
+      }
+      const es = new EventSource(url);
+      const handleData = (raw: string) => {
+        try {
+          if (!raw) return;
+          const data = JSON.parse(raw) as AgentTaskEvent;
+          onEvent(data);
+        } catch (e) {
+          onError?.(e);
+        }
+      };
+      es.onmessage = (msg: MessageEvent) => {
+        handleData(msg.data);
+      };
+      es.addEventListener("task_event", ((msg: MessageEvent) => {
+        handleData(msg.data);
+      }) as EventListener);
+      es.onerror = (err) => {
+        onError?.(err);
+      };
+      return () => {
+        es.close();
+      };
     },
     async cancelAgentTask(taskId){return requireData(await client.POST("/agent-tasks/{taskId}/cancel",{params:{path:{taskId}}}));},
     async listAgentGrants(agentId){return requireData(await client.GET("/agents/{agentId}/profile-grants",{params:{path:{agentId}}}));},

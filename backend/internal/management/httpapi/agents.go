@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
@@ -210,6 +212,84 @@ func (h *Handler) getAgentTaskTranscript(w http.ResponseWriter, r *http.Request)
 		events = []agentdomain.TaskEvent{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
+func (h *Handler) getAgentTaskEvents(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseTaskID(r.PathValue("taskId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeAPIError(w, http.StatusInternalServerError, "streaming_unsupported", errors.New("streaming unsupported"))
+		return
+	}
+
+	// Subscribe first so no events are lost between replay and live stream
+	eventsChan, unsubscribe, err := h.runtime.Agents.SubscribeTaskEvents(r.Context(), id, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	defer unsubscribe()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	var lastSeq int64
+	existing, _ := h.runtime.Agents.GetTaskTranscript(r.Context(), id, caller)
+	for _, ev := range existing {
+		data, err := json.Marshal(ev)
+		if err != nil {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+			return
+		}
+		flusher.Flush()
+		if ev.Seq > lastSeq {
+			lastSeq = ev.Seq
+		}
+		if ev.Type == agentdomain.TaskEventTerminal {
+			return
+		}
+	}
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case event, ok := <-eventsChan:
+			if !ok {
+				return
+			}
+			if event.Seq <= lastSeq {
+				continue
+			}
+			data, err := json.Marshal(event)
+			if err != nil {
+				continue
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				return
+			}
+			flusher.Flush()
+			lastSeq = event.Seq
+			if event.Type == agentdomain.TaskEventTerminal {
+				return
+			}
+		}
+	}
 }
 func (h *Handler) cancelAgentTask(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseTaskID(r.PathValue("taskId"))
