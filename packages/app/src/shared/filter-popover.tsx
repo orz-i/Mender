@@ -7,6 +7,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@mender/ui/components/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mender/ui/components/select";
 import { cn } from "@mender/ui/lib/utils";
 
 import { t } from "../i18n/i18n";
@@ -96,21 +103,31 @@ export function FilterSelectField({
   options: Array<{ value: string; label: string }>;
   className?: string;
 }) {
+  const selected = options.find((option) => option.value === value)?.label ?? "";
+
   return (
-    <label className={cn("grid gap-1.5 text-sm font-medium text-muted-foreground", className)}>
+    <div className={cn("grid gap-1.5 text-sm font-medium text-muted-foreground", className)}>
       <span className="text-foreground">{t(label)}</span>
-      <select
-        aria-label={t(label)}
+      <Select
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+        onValueChange={(next) => {
+          if (next !== null) onChange(String(next));
+        }}
       >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {t(option.label)}
-          </option>
-        ))}
-      </select>
-    </label>
+        <SelectTrigger
+          aria-label={t(label)}
+          className="h-9 w-full rounded-lg border-input bg-card text-sm text-foreground"
+        >
+          <SelectValue>{t(selected)}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {t(option.label)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

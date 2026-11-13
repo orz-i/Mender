@@ -25,7 +25,7 @@ function PaginationHarness({ items }: { items: string[] }) {
 }
 
 describe("table pagination", () => {
-  it("navigates, reports the visible range, and resets after a page-size change", () => {
+  it("navigates, reports the visible range, and resets after a page-size change", async () => {
     render(<PaginationHarness items={["one", "two", "three", "four", "five"]} />);
 
     expect(screen.getByText("Rows 1–2 of 5")).toBeTruthy();
@@ -40,9 +40,11 @@ describe("table pagination", () => {
     expect(screen.getByText("three")).toBeTruthy();
     expect(screen.queryByText("one")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Test rows rows per page"), {
-      target: { value: "3" },
-    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Test rows rows per page" }));
+    const option = await screen.findByRole("option", { name: "3" });
+    fireEvent.pointerDown(option, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.pointerUp(option, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.click(option);
 
     expect(screen.getByText("Rows 1–3 of 5")).toBeTruthy();
     expect(screen.getByText("Page 1 of 2")).toBeTruthy();

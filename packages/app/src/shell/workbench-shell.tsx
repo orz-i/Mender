@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   BellIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
-  CommandIcon,
+  CornerDownLeftIcon,
   LanguagesIcon,
   MinusIcon,
   RefreshCwIcon,
@@ -70,6 +70,8 @@ export function WorkbenchShell({
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
   const [pendingApprovalsList, setPendingApprovalsList] = useState<PendingAgentApproval[]>([]);
   const [appearance, setAppearance] = useState<Appearance>(readAppearance);
@@ -148,7 +150,7 @@ export function WorkbenchShell({
     return () => {
       active = false;
     };
-  }, [client, addLog]);
+  }, [client, addLog, refreshNonce]);
 
   useEffect(() => {
     if (!approvals) return;
@@ -175,7 +177,7 @@ export function WorkbenchShell({
       active = false;
       clearInterval(timer);
     };
-  }, [approvals]);
+  }, [approvals, refreshNonce]);
 
   // Keyboard shortcut listener:
   // Cmd/Ctrl+K: Command Palette
@@ -192,7 +194,14 @@ export function WorkbenchShell({
       }
       if (isCmdOrCtrl && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen((open) => !open);
+        setCommandOpen((open) => {
+          const next = !open;
+          if (!next) {
+            setQuery("");
+          }
+          setActiveCommandIndex(0);
+          return next;
+        });
         return;
       }
       if (isCmdOrCtrl && event.key === "`") {
@@ -202,6 +211,8 @@ export function WorkbenchShell({
       }
       if (event.key === "Escape") {
         setCommandOpen(false);
+        setQuery("");
+        setActiveCommandIndex(0);
       }
     };
     window.addEventListener("keydown", handler);
@@ -226,13 +237,20 @@ export function WorkbenchShell({
   const results = needle
     ? visibleNavigation.filter((item) => t(item.label).toLocaleLowerCase().includes(needle))
     : visibleNavigation;
+  const activeResultIndex = results.length > 0 ? Math.min(activeCommandIndex, results.length - 1) : -1;
 
   function goTo(to: string) {
     void navigate(to);
     setCommandOpen(false);
     setSettingsOpen(false);
     setQuery("");
+    setActiveCommandIndex(0);
   }
+
+  const handleRefresh = useCallback(() => {
+    setRefreshNonce((prev) => prev + 1);
+    window.dispatchEvent(new CustomEvent("mender:refresh"));
+  }, []);
 
   const handleResolveApproval = async (approvalId: string, choice: "allow_once" | "reject") => {
     if (!approvals) return;
@@ -251,12 +269,12 @@ export function WorkbenchShell({
     <div
       data-slot="workbench-layout"
       data-layout="workbench"
-      className="flex h-screen w-screen min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground select-none"
+      className="flex h-screen w-screen min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground"
     >
       {/* Desktop Custom Titlebar */}
       <header
         data-slot="workbench-titlebar"
-        className="app-drag-region flex h-[38px] shrink-0 items-center justify-between border-b border-border/75 bg-card/75 px-3 text-xs backdrop-blur"
+        className="app-drag-region flex h-[38px] shrink-0 items-center justify-between border-b border-border/75 bg-card/75 px-3 text-xs backdrop-blur select-none"
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest(".app-no-drag")) return;
           void controls?.toggleMaximise?.();
@@ -279,7 +297,10 @@ export function WorkbenchShell({
         <div className="app-no-drag flex items-center">
           <button
             type="button"
-            onClick={() => setCommandOpen(true)}
+            onClick={() => {
+              setActiveCommandIndex(0);
+              setCommandOpen(true);
+            }}
             className="flex h-7 w-[260px] sm:w-[320px] items-center justify-between rounded-md border border-border/80 bg-background/80 px-2.5 text-xs text-muted-foreground shadow-2xs transition-colors hover:border-border hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             aria-label={t("Search pages…")}
           >
@@ -337,9 +358,7 @@ export function WorkbenchShell({
                   variant="ghost"
                   className="size-7 text-muted-foreground hover:text-foreground"
                   aria-label={t("Refresh")}
-                  onClick={() => {
-                    void navigate(0);
-                  }}
+                  onClick={handleRefresh}
                 />
               }
             >
@@ -478,7 +497,7 @@ export function WorkbenchShell({
         <nav
           aria-label={t("Primary navigation")}
           data-slot="workbench-activity-bar"
-          className="flex w-[48px] shrink-0 flex-col items-center border-r border-border/75 bg-sidebar py-2"
+          className="flex w-[48px] shrink-0 flex-col items-center border-r border-border/75 bg-sidebar py-2 select-none"
         >
           <div className="flex flex-col items-center gap-1.5">
             {workbenchNavigation.map((item) => {
@@ -573,12 +592,6 @@ export function WorkbenchShell({
                 {t(trail[trail.length - 1]!.label)}
               </span>
             </nav>
-
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-                {location.pathname}
-              </span>
-            </div>
           </div>
 
           {/* Main Scrollable Canvas */}
@@ -587,7 +600,9 @@ export function WorkbenchShell({
             className="flex-1 min-h-0 min-w-0 overflow-y-auto p-4 sm:p-5 [scrollbar-width:thin]"
           >
             <PageHeadingContext.Provider value={updatePageHeading}>
-              <Outlet />
+              <Fragment key={refreshNonce}>
+                <Outlet />
+              </Fragment>
             </PageHeadingContext.Provider>
           </main>
 
@@ -748,7 +763,7 @@ export function WorkbenchShell({
       {/* Desktop Status Bar */}
       <footer
         data-slot="workbench-statusbar"
-        className="flex h-[26px] shrink-0 items-center justify-between border-t border-border/75 bg-sidebar px-3 text-[11px] font-mono text-muted-foreground"
+        className="flex h-[26px] shrink-0 items-center justify-between border-t border-border/75 bg-sidebar px-3 text-[11px] font-mono text-muted-foreground select-none"
       >
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5">
@@ -797,22 +812,6 @@ export function WorkbenchShell({
         </div>
 
         <div className="flex items-center gap-3">
-          {pendingApprovalCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setConsoleOpen(true);
-                setConsoleTab("approvals");
-              }}
-              className="inline-flex items-center gap-1 text-destructive hover:underline"
-            >
-              <span>⚠️</span>
-              <span>
-                {pendingApprovalCount} {t("Pending approvals")}
-              </span>
-            </button>
-          ) : null}
-          <span className="text-border">|</span>
           <span className="uppercase text-[10px]">{locale === "en" ? "EN" : "ZH"}</span>
           <span className="uppercase text-[10px]">{appearance}</span>
         </div>
@@ -823,6 +822,7 @@ export function WorkbenchShell({
         open={commandOpen}
         onOpenChange={(open) => {
           setCommandOpen(open);
+          setActiveCommandIndex(0);
           if (!open) setQuery("");
         }}
       >
@@ -840,7 +840,29 @@ export function WorkbenchShell({
                 autoFocus
                 aria-label={t("Search pages")}
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setActiveCommandIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    if (results.length > 0) {
+                      setActiveCommandIndex((prev) => (prev + 1) % results.length);
+                    }
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    if (results.length > 0) {
+                      setActiveCommandIndex((prev) => (prev - 1 + results.length) % results.length);
+                    }
+                  } else if (event.key === "Enter" && activeResultIndex >= 0) {
+                    const target = results[activeResultIndex];
+                    if (target) {
+                      event.preventDefault();
+                      goTo(target.to);
+                    }
+                  }
+                }}
                 placeholder={t("Search pages…")}
                 className="h-9 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               />
@@ -848,18 +870,29 @@ export function WorkbenchShell({
           </div>
           <div className="max-h-[min(64vh,440px)] space-y-0.5 overflow-y-auto p-2">
             {results.length ? (
-              results.map((item) => {
+              results.map((item, index) => {
                 const Icon = item.icon;
+                const isSelected = index === activeResultIndex;
                 return (
                   <button
                     key={item.to}
                     type="button"
+                    data-active={isSelected ? "true" : undefined}
+                    onMouseEnter={() => setActiveCommandIndex(index)}
                     onClick={() => goTo(item.to)}
-                    className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                    className={[
+                      "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                      isSelected ? "bg-muted font-medium text-foreground" : "hover:bg-muted/60",
+                    ].join(" ")}
                   >
-                    <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                    <Icon
+                      className={isSelected ? "size-4 text-foreground" : "size-4 text-muted-foreground"}
+                      aria-hidden="true"
+                    />
                     <span className="flex-1">{t(item.label)}</span>
-                    <CommandIcon className="size-3.5 text-muted-foreground/40" aria-hidden="true" />
+                    {isSelected ? (
+                      <CornerDownLeftIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                    ) : null}
                   </button>
                 );
               })

@@ -46,26 +46,28 @@ function FilterHarness({ onReset }: { onReset?: () => void }) {
 }
 
 describe("FilterPopover", () => {
-  it("renders trigger and expands popover with filters and active count", () => {
+  it("renders trigger and expands popover with filters and active count", async () => {
     const handleReset = vi.fn();
     render(<FilterHarness onReset={handleReset} />);
 
     const trigger = screen.getByRole("button", { name: "Filters" });
     expect(trigger).toBeTruthy();
-    expect(screen.queryByLabelText("Skill source filter")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Skill source filter" })).toBeNull();
 
     // Click trigger to open popover
     fireEvent.click(trigger);
-    expect(screen.getByLabelText("Skill source filter")).toBeTruthy();
-    expect(screen.getByLabelText("Skill status filter")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Skill source filter" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Skill status filter" })).toBeTruthy();
 
     // Change a filter
-    fireEvent.change(screen.getByLabelText("Skill source filter"), {
-      target: { value: "builtin" },
-    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Skill source filter" }));
+    const builtinOption = await screen.findByRole("option", { name: "Built-in" });
+    fireEvent.pointerDown(builtinOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.pointerUp(builtinOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.click(builtinOption);
 
     // Check that reset button appears
-    const reset = screen.getByRole("button", { name: "Reset" });
+    const reset = await screen.findByRole("button", { name: "Reset" });
     expect(reset).toBeTruthy();
     fireEvent.click(reset);
 

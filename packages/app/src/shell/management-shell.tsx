@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   BellIcon,
   ChevronLeftIcon,
-  CommandIcon,
+  CornerDownLeftIcon,
   LanguagesIcon,
   MenuIcon,
   RefreshCwIcon,
@@ -45,6 +45,8 @@ export function ManagementShell({ client, approvals }: {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
   const [appearance, setAppearance] = useState<Appearance>(readAppearance);
 
@@ -82,7 +84,7 @@ export function ManagementShell({ client, approvals }: {
       .then((status) => { if (active) setRuntimeReady(status.ready); })
       .catch(() => { if (active) setRuntimeReady(false); });
     return () => { active = false; };
-  }, [client]);
+  }, [client, refreshNonce]);
 
   useEffect(() => {
     if (!approvals) return;
@@ -97,13 +99,18 @@ export function ManagementShell({ client, approvals }: {
     refresh();
     const timer = setInterval(refresh, 2500);
     return () => { active = false; clearInterval(timer); };
-  }, [approvals]);
+  }, [approvals, refreshNonce]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen((open) => !open);
+        setCommandOpen((open) => {
+          const next = !open;
+          if (!next) setQuery("");
+          setActiveCommandIndex(0);
+          return next;
+        });
       }
     };
     window.addEventListener("keydown", handler);
@@ -123,6 +130,7 @@ export function ManagementShell({ client, approvals }: {
   const results = needle
     ? visibleNavigation.filter((item) => t(item.label).toLocaleLowerCase().includes(needle))
     : visibleNavigation;
+  const activeResultIndex = results.length > 0 ? Math.min(activeCommandIndex, results.length - 1) : -1;
 
   function goTo(to: string) {
     void navigate(to);
@@ -130,12 +138,18 @@ export function ManagementShell({ client, approvals }: {
     setNavigationOpen(false);
     setSettingsOpen(false);
     setQuery("");
+    setActiveCommandIndex(0);
   }
+
+  const handleRefresh = useCallback(() => {
+    setRefreshNonce((prev) => prev + 1);
+    window.dispatchEvent(new CustomEvent("mender:refresh"));
+  }, []);
 
   return (
     <div data-slot="management-layout" data-layout="top" className="flex min-h-screen min-w-0 flex-col bg-background text-foreground">
-      <header data-slot="app-header" className="sticky top-0 z-30 flex h-[58px] shrink-0 items-center gap-3 border-b border-border/65 bg-background px-4 sm:px-6">
-        <div className="flex min-w-[128px] shrink-0 items-center gap-2">
+      <header data-slot="app-header" className="sticky top-0 z-30 flex h-[58px] shrink-0 items-center gap-2 border-b border-border/65 bg-background px-4 sm:px-6 xl:gap-3">
+        <div className="flex shrink-0 items-center gap-2 xl:min-w-[128px]">
           <Button type="button" variant="ghost" size="icon-sm"
             aria-label={t("Open navigation")} onClick={() => setNavigationOpen(true)}
             className="size-8 lg:hidden">
@@ -147,13 +161,13 @@ export function ManagementShell({ client, approvals }: {
           </Link>
         </div>
         <nav aria-label={t("Primary navigation")} data-slot="top-navigation"
-          className="hidden min-w-0 flex-1 items-center justify-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex">
-          <div className="flex w-max shrink-0 items-center gap-1 rounded-[11px] bg-secondary/70 p-1">
+          className="hidden min-w-0 flex-1 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex">
+          <div className="mx-auto flex w-max shrink-0 items-center gap-0.5 rounded-[11px] bg-secondary/70 p-1 xl:gap-1">
             {primaryNavigation.map((item) => (
               <NavLink key={item.to} to={item.to} end={item.to === "/"}
                 aria-label={t(item.label)}
                 className={({ isActive }) => [
-                  "inline-flex h-[35px] shrink-0 items-center justify-center rounded-lg px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                  "inline-flex h-[35px] shrink-0 items-center justify-center rounded-lg px-2.5 text-[12.5px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-ring xl:px-3.5 xl:text-[13px]",
                   isActive ? "bg-card text-foreground shadow-[0_1px_3px_rgb(15_15_20/0.12)]" :
                     "text-muted-foreground hover:bg-card/65 hover:text-foreground",
                 ].join(" ")}>
@@ -165,14 +179,14 @@ export function ManagementShell({ client, approvals }: {
         <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
           <Tooltip>
             <TooltipTrigger render={<Button type="button" size="icon-sm" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground"
-              aria-label={t("Search pages…")} onClick={() => setCommandOpen(true)} />}>
+              aria-label={t("Search pages…")} onClick={() => { setActiveCommandIndex(0); setCommandOpen(true); }} />}>
               <SearchIcon className="size-[17px]" aria-hidden="true" />
             </TooltipTrigger>
             <TooltipContent side="bottom">{t("Search pages…") + " (" + t("⌘K") + ")"}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={<Button type="button" size="icon-sm" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground"
-              aria-label={t("Refresh")} onClick={() => { void navigate(0); }} />}>
+              aria-label={t("Refresh")} onClick={handleRefresh} />}>
               <RefreshCwIcon className="size-[17px]" aria-hidden="true" />
             </TooltipTrigger>
             <TooltipContent side="bottom">{t("Refresh")}</TooltipContent>
@@ -318,12 +332,15 @@ export function ManagementShell({ client, approvals }: {
           </nav>
         ) : null}
         <PageHeadingContext.Provider value={updatePageHeading}>
-          <Outlet />
+          <Fragment key={refreshNonce}>
+            <Outlet />
+          </Fragment>
         </PageHeadingContext.Provider>
       </main>
 
       <Dialog open={commandOpen} onOpenChange={(open) => {
         setCommandOpen(open);
+        setActiveCommandIndex(0);
         if (!open) setQuery("");
       }}>
         <DialogContent className="gap-0 p-0 sm:max-w-lg">
@@ -335,20 +352,51 @@ export function ManagementShell({ client, approvals }: {
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
               <input autoFocus aria-label={t("Search pages")} value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setActiveCommandIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    if (results.length > 0) {
+                      setActiveCommandIndex((prev) => (prev + 1) % results.length);
+                    }
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    if (results.length > 0) {
+                      setActiveCommandIndex((prev) => (prev - 1 + results.length) % results.length);
+                    }
+                  } else if (event.key === "Enter" && activeResultIndex >= 0) {
+                    const target = results[activeResultIndex];
+                    if (target) {
+                      event.preventDefault();
+                      goTo(target.to);
+                    }
+                  }
+                }}
                 placeholder={t("Search pages…")}
                 className="h-9 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40" />
             </div>
           </div>
           <div className="max-h-[min(64vh,440px)] space-y-0.5 overflow-y-auto p-2">
-            {results.length ? results.map((item) => {
+            {results.length ? results.map((item, index) => {
               const Icon = item.icon;
+              const isSelected = index === activeResultIndex;
               return (
-                <button key={item.to} type="button" onClick={() => goTo(item.to)}
-                  className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
-                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                <button key={item.to} type="button"
+                  data-active={isSelected ? "true" : undefined}
+                  onMouseEnter={() => setActiveCommandIndex(index)}
+                  onClick={() => goTo(item.to)}
+                  className={[
+                    "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    isSelected ? "bg-muted font-medium text-foreground" : "hover:bg-muted/60",
+                  ].join(" ")}>
+                  <Icon className={isSelected ? "size-4 text-foreground" : "size-4 text-muted-foreground"} aria-hidden="true" />
                   <span className="flex-1">{t(item.label)}</span>
-                  <CommandIcon className="size-3.5 text-muted-foreground/40" aria-hidden="true" />
+                  {isSelected ? (
+                    <CornerDownLeftIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                  ) : null}
                 </button>
               );
             }) : (

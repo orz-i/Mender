@@ -87,7 +87,7 @@ export function DataPanel({
 }) {
   const Icon = icon;
   return (
-    <Card data-kind="data-panel" className={cn("gap-0 overflow-hidden rounded-[15px] py-0 shadow-none", className)}>
+    <Card data-kind="data-panel" className={cn("gap-0 overflow-hidden rounded-xl py-0 shadow-none", className)}>
       <CardHeader className="min-h-[54px] px-5 py-3.5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">

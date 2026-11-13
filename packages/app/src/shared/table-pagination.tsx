@@ -1,9 +1,17 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mender/ui/components/select";
+import { cn } from "@mender/ui/lib/utils";
+
 import { formatNumber, t } from "../i18n/i18n";
 import { IconButton } from "./icon-button";
 import type { PaginationState } from "./pagination";
-import { cn } from "@mender/ui/lib/utils";
 
 export function TablePagination<T>({
   label,
@@ -38,23 +46,30 @@ export function TablePagination<T>({
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 whitespace-nowrap">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <span>{t("Rows per page")}</span>
-          <select
-            aria-label={t("{{label}} rows per page", { label: t(label) })}
-            value={pagination.pageSize}
-            onChange={(event) =>
-              pagination.setPageSize(Number(event.target.value))
-            }
-            className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+          <Select
+            value={String(pagination.pageSize)}
+            onValueChange={(next) => {
+              if (next !== null) pagination.setPageSize(Number(next));
+            }}
           >
-            {pagination.pageSizeOptions.map((pageSize) => (
-              <option key={pageSize} value={pageSize}>
-                {formatNumber(pageSize)}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger
+              size="sm"
+              aria-label={t("{{label}} rows per page", { label: t(label) })}
+              className="h-8 min-w-[70px] rounded-lg bg-background text-sm text-foreground"
+            >
+              <SelectValue>{formatNumber(pagination.pageSize)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent className="min-w-[70px]">
+              {pagination.pageSizeOptions.map((pageSize) => (
+                <SelectItem key={pageSize} value={String(pageSize)}>
+                  {formatNumber(pageSize)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <span className="whitespace-nowrap">
           {t("Page {{page}} of {{pageCount}}", {

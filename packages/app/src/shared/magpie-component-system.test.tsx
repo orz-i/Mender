@@ -26,6 +26,8 @@ describe("Magpie-compatible component primitives", () => {
       </DataPanel>,
     );
     const panel = document.querySelector('[data-kind="data-panel"]')!;
+    expect(panel.className).toContain("rounded-xl");
+    expect(panel.className).not.toContain("rounded-[15px]");
     const heading = within(panel as HTMLElement).getByText("Profiles");
     expect(heading).toBeTruthy();
     expect(panel.querySelector('[data-slot="card-header"] svg')).toBeNull();

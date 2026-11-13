@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { LocalOwnerCapabilities, ManagementClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -299,6 +299,134 @@ describe("MenderApp Magpie-inspired native workspace", () => {
     expect(close).toHaveBeenCalledTimes(1);
 
     expect(screen.getByText("⌘K Palette · ⌘` Console · ⌘⇧P Playground")).toBeTruthy();
+  });
+
+  it("supports keyboard ArrowUp/ArrowDown/Enter in Quick navigation in both shells", () => {
+    mount();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    let dialog = screen.getByRole("dialog", { name: "Quick navigation" });
+    let search = within(dialog).getByRole("textbox", { name: "Search pages" });
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(within(dialog).getByRole("button", { name: "Playground" }).getAttribute("data-active")).toBe("true");
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(within(dialog).getByRole("button", { name: "Tools" }).getAttribute("data-active")).toBe("true");
+    fireEvent.keyDown(search, { key: "ArrowUp" });
+    expect(within(dialog).getByRole("button", { name: "Playground" }).getAttribute("data-active")).toBe("true");
+    fireEvent.change(search, { target: { value: "Runtime" } });
+    expect(within(dialog).getByRole("button", { name: "Runtime" }).getAttribute("data-active")).toBe("true");
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.queryByRole("dialog", { name: "Quick navigation" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Runtime" })).toBeTruthy();
+
+    cleanup();
+
+    const workbenchClient = {
+      ...overviewClient(),
+      browseTools: () => Promise.resolve({ tools: [] }),
+    } as unknown as ManagementClient;
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <MenderApp variant="workbench" client={workbenchClient} />
+      </MemoryRouter>,
+    );
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    dialog = screen.getByRole("dialog", { name: "Quick navigation" });
+    search = within(dialog).getByRole("textbox", { name: "Search pages" });
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.queryByRole("dialog", { name: "Quick navigation" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Playground" })).toBeTruthy();
+  });
+
+  it("keeps main workspace selectable, removes debug path pill & statusbar approval duplicate, and refreshes without reload", async () => {
+    const getSystemStatus = vi.fn().mockResolvedValue({
+      ready: true,
+      policy: {
+        mode: "configured", editable: true,
+        approval: "fail_closed_when_required", defaultDecision: "allow",
+        ruleCount: 0, enabledRuleCount: 0,
+      },
+      credentials: { resolver: "inventory", persistentStore: true, editable: true },
+      mcp: { stdio: true, streamableHttp: true, exposureModes: ["direct", "dynamic", "hybrid"] },
+    });
+    const listAudit = vi.fn().mockResolvedValue({ records: [] });
+    const client = {
+      ...overviewClient(),
+      getSystemStatus,
+      listAudit,
+      listProviderActivationAudit: () => Promise.resolve({ records: [] }),
+      browseTools: () => Promise.resolve({ tools: [] }),
+    } as unknown as ManagementClient;
+    const onRefresh = vi.fn();
+    window.addEventListener("mender:refresh", onRefresh);
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/audit"]}>
+          <MenderApp
+            variant="workbench"
+            client={client}
+            localOwner={{
+              approvals: {
+                listPendingAgentApprovals: () => Promise.resolve({
+                  approvals: [{
+                    agentName: "Agent A",
+                    workspaceKey: "",
+                    approval: {
+                      approvalId: "aapr_1",
+                      taskId: "atask_1",
+                      agentId: "agent_1",
+                      kind: "read",
+                      target: "foo.txt",
+                      canAllow: true,
+                      status: "pending",
+                      createdAt: "2026-10-17T00:00:00Z",
+                      expiresAt: "2099-01-01T00:00:00Z",
+                    },
+                  }],
+                }),
+                listAgentApprovals: () => Promise.resolve({ approvals: [] }),
+                decideAgentApproval: () => Promise.resolve({} as never),
+                getAgentApprovalPolicy: () => Promise.resolve({} as never),
+                listAgentApprovalPolicies: () => Promise.resolve({ policies: [] }),
+                setAgentApprovalPolicy: () => Promise.resolve({} as never),
+                releasePendingAgentApprovals: () => Promise.resolve({ released: 0 }),
+              },
+            }}
+          />
+        </MemoryRouter>,
+      );
+
+      const layout = document.querySelector('[data-slot="workbench-layout"]')!;
+      expect(layout.className).not.toContain("select-none");
+      expect(document.querySelector('[data-slot="workbench-titlebar"]')?.className).toContain("select-none");
+      expect(document.querySelector('[data-slot="workbench-activity-bar"]')?.className).toContain("select-none");
+      expect(document.querySelector('[data-slot="workbench-statusbar"]')?.className).toContain("select-none");
+
+      const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" }).parentElement!;
+      expect(within(breadcrumb).queryByText("/audit")).toBeNull();
+
+      const statusBar = document.querySelector('[data-slot="workbench-statusbar"]') as HTMLElement;
+      expect(await within(statusBar).findByText("Runtime: Connected")).toBeTruthy();
+      expect(within(statusBar).queryByText(/Pending approvals/)).toBeNull();
+
+      // Open console to verify logs stay intact after Refresh
+      fireEvent.click(screen.getByRole("button", { name: "Toggle Console" }));
+      expect(screen.getByText("Workbench initialized")).toBeTruthy();
+
+      const initialCalls = getSystemStatus.mock.calls.length;
+      const initialAuditCalls = listAudit.mock.calls.length;
+      const titlebar = document.querySelector('[data-slot="workbench-titlebar"]') as HTMLElement;
+      fireEvent.click(within(titlebar).getByRole("button", { name: "Refresh" }));
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(getSystemStatus.mock.calls.length).toBeGreaterThan(initialCalls);
+        expect(listAudit.mock.calls.length).toBeGreaterThan(initialAuditCalls);
+      });
+      expect(screen.getByText("Workbench initialized")).toBeTruthy();
+    } finally {
+      window.removeEventListener("mender:refresh", onRefresh);
+    }
   });
 });
 
