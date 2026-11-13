@@ -19,6 +19,8 @@ export interface MarketplacePluginActions {
   enable: boolean;
   disable: boolean;
   remove: boolean;
+  install?: boolean;
+  upgrade?: boolean;
 }
 
 export interface MarketplaceTechnicalDetail {
@@ -38,6 +40,12 @@ export interface MarketplaceCreateAction {
   href: string;
 }
 
+export interface MarketplaceInstallAction {
+  label: string;
+  pluginId: string;
+  version?: string;
+}
+
 export interface MarketplacePlugin {
   key: string;
   kind: MarketplacePluginKind;
@@ -53,8 +61,12 @@ export interface MarketplacePlugin {
   actions: MarketplacePluginActions;
   technicalDetails: MarketplaceTechnicalDetail[];
   createAction?: MarketplaceCreateAction;
+  installAction?: MarketplaceInstallAction;
   actionRef?: string;
   issue?: MarketplacePluginIssue;
+  pluginId?: string;
+  usageCount?: number;
+  updateAvailable?: string;
 }
 
 export interface MarketplaceInstaller {
@@ -71,10 +83,36 @@ export function pluginInstaller(
     async install(){return (await install())!==null;}};
 }
 
+export function isVersionNewer(candidate: string, current: string): boolean {
+  if (!candidate || !current || candidate === current) return false;
+  const parse = (v: string) =>
+    (v.replace(/^v/i, "").split(/[-+]/)[0] ?? "").split(".").map((n) => parseInt(n, 10) || 0);
+  const candParts = parse(candidate);
+  const currParts = parse(current);
+  const len = Math.max(candParts.length, currParts.length);
+  for (let i = 0; i < len; i++) {
+    const c = candParts[i] ?? 0;
+    const cur = currParts[i] ?? 0;
+    if (c > cur) return true;
+    if (c < cur) return false;
+  }
+  return false;
+}
+
 export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):MarketplacePlugin[]{
   // Marketplace eligibility comes from the Host, not from capability claims
   // or a guessed route. Native installations remain for repair/removal.
-  return entries.filter(entry=>entry.marketplaceAction!=="none" || Boolean(entry.installationId))
+  const registryVersions = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.sourceKind === "registry") {
+      const currentLatest = registryVersions.get(entry.pluginId);
+      if (!currentLatest || isVersionNewer(entry.packageVersion, currentLatest)) {
+        registryVersions.set(entry.pluginId, entry.packageVersion);
+      }
+    }
+  }
+
+  return entries.filter(entry=>entry.marketplaceAction!=="none" || Boolean(entry.installationId) || entry.sourceKind==="registry")
     .map((entry):MarketplacePlugin=>{
     const kinds:Record<PluginCatalogueEntry["kind"], "provider"|"sandbox"|"tunnel"|"agent">={
       "provider.tools":"provider",
@@ -86,12 +124,13 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
     if(kind===undefined){throw new Error("Unsupported plugin extension kind");}
     const labels={provider:"Provider plugin",sandbox:"Sandbox backend",
       tunnel:"Tunnel transport",agent:"Agent backend"};
-    const enabled=entry.enabled && entry.status==="enabled" && entry.issue===undefined;
     const installationId=entry.installationId;
+    const isRegistryOffering = entry.sourceKind === "registry" && !installationId;
+    const enabled=!isRegistryOffering && entry.enabled && entry.status==="enabled" && entry.issue===undefined;
     const action=entry.marketplaceAction;
     const actionKind=action==="create.provider"?"provider":action==="create.sandbox"?"sandbox":
       action==="create.agent"?"agent":action==="create.tunnel"?"tunnel":null;
-    if(actionKind!==null && actionKind!==kind){
+    if(!isRegistryOffering && actionKind!==null && actionKind!==kind){
       throw new Error("Host Marketplace action and plugin extension kind disagree");
     }
     const params=new URLSearchParams({create:"1",pluginId:entry.pluginId});
@@ -99,40 +138,63 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
     const pathname=action==="create.provider"?"/tools":
       action==="create.sandbox"?(installationId?"/sandboxes/new/external":"/sandboxes/new"):
       action==="create.agent"?"/agents/new":action==="create.tunnel"?"/tunnels":null;
-    const createAction=enabled && pathname?{
+    const createAction=!isRegistryOffering && enabled && pathname?{
       label:action==="create.provider"?"Add provider":action==="create.sandbox"?"Create sandbox":
         action==="create.agent"?"Configure agent":"Add tunnel",
       href:pathname+"?"+params.toString(),
     }:undefined;
+    const latestRegistryVer = registryVersions.get(entry.pluginId);
+    const updateAvailable = installationId && latestRegistryVer && isVersionNewer(latestRegistryVer, entry.packageVersion)
+      ? latestRegistryVer
+      : undefined;
+
     // An installation is managed by its exact ID, not by a creatable route.
     const manageableInstallation=!!installationId && ["provider","sandbox","tunnel"].includes(kind);
+    const actions: MarketplacePluginActions = isRegistryOffering ? {
+      enable: false,
+      disable: false,
+      remove: false,
+      install: true,
+    } : manageableInstallation ? {
+      enable: entry.status === "disabled" && !entry.issue,
+      disable: entry.status === "enabled" && entry.usageCount === 0,
+      remove: entry.usageCount === 0,
+      ...(updateAvailable ? { upgrade: entry.usageCount === 0 } : {}),
+    } : noMarketplaceActions();
+
+    const installAction: MarketplaceInstallAction | undefined = isRegistryOffering ? {
+      label: "Install",
+      pluginId: entry.pluginId,
+      version: entry.packageVersion,
+    } : undefined;
+
     return {
       key:entry.key,kind,kindLabel:labels[kind],
       displayName:entry.displayName||humanizePluginId(entry.pluginId),
       description:entry.description,
-      source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":"Local package",
+      source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":entry.sourceKind==="registry"?"Registry":"Local package",
       version:entry.packageVersion,
-      status:entry.status==="unavailable"?"unavailable":entry.issue?"degraded":entry.status,
+      status:entry.status==="unavailable"?"unavailable":entry.issue?"degraded":entry.status==="available"?"available":entry.status==="disabled"?"disabled":entry.status==="invalid"?"invalid":"enabled",
       enabled:entry.enabled,
       capabilities:entry.capabilities,
-      actions:manageableInstallation?{
-        enable:entry.status==="disabled"&&!entry.issue,
-        disable:entry.status==="enabled"&&entry.usageCount===0,
-        remove:entry.usageCount===0,
-      }:noMarketplaceActions(),
+      actions,
       technicalDetails:[
         {label:"Plugin ID",value:entry.pluginId,mono:true},
         {label:"Extension ID",value:entry.extensionId,mono:true},
-        {label:"Installation ID",value:installationId??"Built-in",mono:!!installationId},
+        {label:"Installation ID",value:installationId??(entry.sourceKind==="builtin"?"Built-in":"Uninstalled"),mono:!!installationId},
         ...(entry.digest?[{label:"Digest",value:entry.digest,mono:true}]:[]),
         ...(entry.installedAt?[{label:"Installed at",value:entry.installedAt,format:"dateTime" as const}]:[]),
-        {label:"Used by resources",value:String(entry.usageCount)},
+        {label:"Used by resources",value:String(entry.usageCount ?? 0)},
         ...(entry.configVersion?[{label:"Config version",value:String(entry.configVersion)}]:[]),
         ...(entry.protocolVersion?[{label:"Protocol version",value:String(entry.protocolVersion)}]:[]),
       ],
       ...(createAction?{createAction}:{}),
+      ...(installAction?{installAction}:{}),
       ...(installationId?{actionRef:installationId}:{}),
       ...(entry.issue?{issue:{code:entry.status==="unavailable"?"runtime_unavailable":"descriptor_unavailable",message:entry.issue}}:{}),
+      pluginId: entry.pluginId,
+      usageCount: entry.usageCount ?? 0,
+      ...(updateAvailable ? { updateAvailable } : {}),
     };
   }).toSorted(compareMarketplacePlugins);
 }
@@ -168,12 +230,32 @@ export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[
 }
 
 export async function loadMarketplacePlugins(client:ManagementClient){
-  const [catalogue,integrations]=await Promise.all([
-    client.listPluginCatalogue(),client.listIntegrationOfferings(),
+  const [catalogue, integrations, updatesResult] = await Promise.all([
+    client.listPluginCatalogue(),
+    client.listIntegrationOfferings(),
+    typeof client.listRegistryUpdates === "function"
+      ? client.listRegistryUpdates().catch(() => ({ updates: [] }))
+      : Promise.resolve({ updates: [] }),
   ]);
-  return [...pluginCatalogueToMarketplace(catalogue.plugins),
-    ...integrationOfferingsToMarketplace(integrations.integrations)]
-    .toSorted(compareMarketplacePlugins);
+  const marketplacePlugins = [
+    ...pluginCatalogueToMarketplace(catalogue.plugins),
+    ...integrationOfferingsToMarketplace(integrations.integrations),
+  ].toSorted(compareMarketplacePlugins);
+
+  if (updatesResult?.updates?.length) {
+    for (const update of updatesResult.updates) {
+      const match = marketplacePlugins.find(
+        (p) =>
+          p.actionRef === update.installationId ||
+          (p.pluginId === update.pluginId && p.actionRef !== undefined),
+      );
+      if (match) {
+        match.updateAvailable = update.targetVersion;
+      }
+    }
+  }
+
+  return marketplacePlugins;
 }
 
 export function marketplaceCursorPage(
@@ -216,6 +298,43 @@ export async function removeMarketplacePlugin(
   await client.deletePluginInstallation(requireActionRef(plugin));
 }
 
+export async function upgradeMarketplacePlugin(
+  client: ManagementClient,
+  plugin: MarketplacePlugin,
+  targetVersion?: string,
+): Promise<void> {
+  const version = targetVersion ?? plugin.updateAvailable;
+  if (!version) {
+    throw new Error("Target version for upgrade is not specified");
+  }
+  if ((plugin.usageCount ?? 0) > 0) {
+    throw new Error("Referenced resources block in-place upgrade");
+  }
+  const installationId = requireActionRef(plugin);
+  await client.upgradeRegistryPlugin({
+    installationId,
+    version,
+  });
+}
+
+export async function installMarketplacePlugin(
+  client: ManagementClient,
+  plugin: MarketplacePlugin,
+  targetVersion?: string,
+): Promise<void> {
+  const pluginId = plugin.pluginId ?? plugin.installAction?.pluginId;
+  if (!pluginId) {
+    throw new Error("Plugin ID is required for installation");
+  }
+  const version =
+    targetVersion ??
+    plugin.installAction?.version ??
+    (plugin.version !== "Reviewed preset" ? plugin.version : undefined);
+  await client.installRegistryPlugin(
+    version !== undefined ? { pluginId, version } : { pluginId },
+  );
+}
+
 export function humanizePluginId(pluginId: string) {
   const known: Record<string, string> = {
     "io.mender.provider.mcp": "MCP",
@@ -256,7 +375,10 @@ function compareMarketplacePlugins(
   right: MarketplacePlugin,
 ) {
   if (left.source !== right.source) {
-    return left.source === "builtin" ? -1 : 1;
+    const priority = (s: string) => (s === "builtin" ? 0 : s === "registry" ? 1 : s === "curated" ? 2 : 3);
+    const diff = priority(left.source) - priority(right.source);
+    if (diff !== 0) return diff;
+    return left.source.localeCompare(right.source);
   }
   return left.displayName.localeCompare(right.displayName);
 }

@@ -2,10 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { IntegrationOffering, ManagementClient, PluginCatalogueEntry } from "@mender/sdk";
 import {
   humanizePluginId,
+  isVersionNewer,
   marketplaceCursorPage,
   pluginCatalogueToMarketplace,
   integrationOfferingsToMarketplace,
   loadMarketplacePlugins,
+  installMarketplacePlugin,
+  upgradeMarketplacePlugin,
   removeMarketplacePlugin,
   setMarketplacePluginEnabled,
 } from "./marketplace";
@@ -202,5 +205,163 @@ describe("Host-reviewed Marketplace projection",()=>{
   });
   it("humanizes technical names only as fallback",()=>{
     expect(humanizePluginId("dev.example.audit-exporter")).toBe("Audit Exporter");
+  });
+
+  it("projects uninstalled registry offerings with install action and Registry label", () => {
+    const registryOffering: PluginCatalogueEntry = {
+      key: "dev.example.remote-search@registry",
+      pluginId: "dev.example.remote-search",
+      extensionId: "main",
+      kind: "provider.tools",
+      marketplaceAction: "none",
+      displayName: "Remote Search",
+      description: "Remote online search tool",
+      packageVersion: "1.0.0",
+      sourceKind: "registry",
+      status: "available",
+      enabled: false,
+      capabilities: ["tool.search"],
+      usageCount: 0,
+    };
+
+    const models = pluginCatalogueToMarketplace([registryOffering]);
+    expect(models).toHaveLength(1);
+    const model = models[0]!;
+    expect(model.source).toBe("registry");
+    expect(model.sourceLabel).toBe("Registry");
+    expect(model.actions.install).toBe(true);
+    expect(model.installAction).toEqual({
+      label: "Install",
+      pluginId: "dev.example.remote-search",
+      version: "1.0.0",
+    });
+    expect(model.createAction).toBeUndefined();
+    expect(model.actionRef).toBeUndefined();
+  });
+
+  it("detects updateAvailable on installed plugin when registry has newer version", () => {
+    const installed = entry("provider.tools", {
+      pluginId: "dev.example.search",
+      packageVersion: "1.0.0",
+      sourceKind: "registry",
+      usageCount: 0,
+    });
+    const registryNewer: PluginCatalogueEntry = {
+      key: "dev.example.search@registry",
+      pluginId: "dev.example.search",
+      extensionId: "main",
+      kind: "provider.tools",
+      marketplaceAction: "none",
+      displayName: "Search",
+      description: "Search plugin",
+      packageVersion: "1.2.0",
+      sourceKind: "registry",
+      status: "available",
+      enabled: false,
+      capabilities: ["tool.search"],
+      usageCount: 0,
+    };
+
+    const models = pluginCatalogueToMarketplace([installed, registryNewer]);
+    const installedModel = models.find((m) => m.key === installed.key)!;
+    expect(installedModel.updateAvailable).toBe("1.2.0");
+    expect(installedModel.actions.upgrade).toBe(true);
+
+    // If usageCount > 0, actions.upgrade is false
+    const busyInstalled = entry("provider.tools", {
+      pluginId: "dev.example.search",
+      packageVersion: "1.0.0",
+      sourceKind: "registry",
+      usageCount: 2,
+    });
+    const busyModels = pluginCatalogueToMarketplace([busyInstalled, registryNewer]);
+    const busyModel = busyModels.find((m) => m.key === busyInstalled.key)!;
+    expect(busyModel.updateAvailable).toBe("1.2.0");
+    expect(busyModel.actions.upgrade).toBe(false);
+  });
+
+  it("upgrades marketplace plugin when usageCount is 0, refuses when usageCount > 0", async () => {
+    const upgradeRegistryPlugin = vi.fn().mockResolvedValue({
+      installation: { installationId: id, packageVersion: "1.2.0" },
+    });
+    const client = { upgradeRegistryPlugin } as unknown as ManagementClient;
+
+    const plugin = {
+      key: "dev.example.provider@" + id,
+      actionRef: id,
+      usageCount: 0,
+      updateAvailable: "1.2.0",
+    } as any;
+
+    await upgradeMarketplacePlugin(client, plugin, "1.2.0");
+    expect(upgradeRegistryPlugin).toHaveBeenCalledWith({
+      installationId: id,
+      version: "1.2.0",
+    });
+
+    // Refuse when referenced
+    const blockedPlugin = {
+      ...plugin,
+      usageCount: 1,
+    };
+    await expect(upgradeMarketplacePlugin(client, blockedPlugin, "1.2.0")).rejects.toThrow(
+      "Referenced resources block in-place upgrade",
+    );
+  });
+
+  it("installs marketplace registry plugin via installMarketplacePlugin", async () => {
+    const installRegistryPlugin = vi.fn().mockResolvedValue({
+      installation: { installationId: "pinst_new", packageVersion: "1.0.0" },
+    });
+    const client = { installRegistryPlugin } as unknown as ManagementClient;
+
+    const plugin = {
+      key: "dev.example.provider@registry",
+      pluginId: "dev.example.provider",
+      version: "1.0.0",
+      installAction: {
+        label: "Install",
+        pluginId: "dev.example.provider",
+        version: "1.0.0",
+      },
+    } as any;
+
+    await installMarketplacePlugin(client, plugin);
+    expect(installRegistryPlugin).toHaveBeenCalledWith({
+      pluginId: "dev.example.provider",
+      version: "1.0.0",
+    });
+  });
+
+  it("loads updates from listRegistryUpdates in loadMarketplacePlugins", async () => {
+    const listPluginCatalogue = vi.fn().mockResolvedValue({ plugins: [entry("provider.tools")] });
+    const listIntegrationOfferings = vi.fn().mockResolvedValue({ integrations: [] });
+    const listRegistryUpdates = vi.fn().mockResolvedValue({
+      updates: [
+        {
+          installationId: id,
+          pluginId: "dev.example.provider",
+          currentVersion: "1.0.0",
+          targetVersion: "2.0.0",
+        },
+      ],
+    });
+    const client = {
+      listPluginCatalogue,
+      listIntegrationOfferings,
+      listRegistryUpdates,
+    } as unknown as ManagementClient;
+
+    const result = await loadMarketplacePlugins(client);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.updateAvailable).toBe("2.0.0");
+  });
+
+  it("correctly compares version numbers in isVersionNewer", () => {
+    expect(isVersionNewer("1.1.0", "1.0.0")).toBe(true);
+    expect(isVersionNewer("2.0.0", "1.9.9")).toBe(true);
+    expect(isVersionNewer("1.0.1", "1.0.0")).toBe(true);
+    expect(isVersionNewer("1.0.0", "1.0.0")).toBe(false);
+    expect(isVersionNewer("1.0.0", "1.1.0")).toBe(false);
   });
 });

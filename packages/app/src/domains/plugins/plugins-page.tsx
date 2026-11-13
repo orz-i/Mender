@@ -45,10 +45,12 @@ import {
   type MarketplaceInstaller,
   type MarketplacePlugin,
   type MarketplacePluginStatus,
+  installMarketplacePlugin,
   loadMarketplacePlugins,
   marketplaceCursorPage,
   removeMarketplacePlugin,
   setMarketplacePluginEnabled,
+  upgradeMarketplacePlugin,
 } from "./marketplace";
 
 type SourceFilter = string;
@@ -81,11 +83,23 @@ export function PluginsPage({
   ]);
 
   const sourceIntent = searchParams.get("intent") === "source";
-  const scopedPlugins = useMemo(() => plugins.filter(plugin =>
-    view==="discover"
-      ? plugin.createAction!==undefined && (!sourceIntent || ["provider","integration"].includes(plugin.kind))
-      : plugin.actionRef!==undefined
-  ),[plugins,view,sourceIntent]);
+  const scopedPlugins = useMemo(() => {
+    const installedPluginIds = new Set(
+      plugins.filter((p) => p.actionRef !== undefined).map((p) => p.pluginId).filter(Boolean),
+    );
+    return plugins.filter((plugin) => {
+      if (view === "discover") {
+        if (plugin.installAction && plugin.pluginId && installedPluginIds.has(plugin.pluginId)) {
+          return false;
+        }
+        return (
+          (plugin.createAction !== undefined || plugin.installAction !== undefined) &&
+          (!sourceIntent || ["provider", "integration"].includes(plugin.kind))
+        );
+      }
+      return plugin.actionRef !== undefined;
+    });
+  }, [plugins, view, sourceIntent]);
 
   const kindOptions = useMemo(() => {
     const labelsByKind = new Map<string, string>();
@@ -160,6 +174,34 @@ export function PluginsPage({
       if (await installer.install()) {
         await refresh();
       }
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleInstallRegistry(plugin: MarketplacePlugin) {
+    setBusy("install:" + plugin.key);
+    setError("");
+    try {
+      await installMarketplacePlugin(client, plugin);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleUpgradeRegistry(plugin: MarketplacePlugin) {
+    if (!plugin.updateAvailable) return;
+    if ((plugin.usageCount ?? 0) > 0) return;
+    setBusy("upgrade:" + plugin.key);
+    setError("");
+    try {
+      await upgradeMarketplacePlugin(client, plugin, plugin.updateAvailable);
+      await refresh();
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -277,9 +319,16 @@ export function PluginsPage({
                   </h2>
                   <span className="text-[11px] tabular-nums text-muted-foreground/65">{group.items.length}</span>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {group.items.map((plugin) => (
-                    <PluginCard key={plugin.key} plugin={plugin} view={view} />
+                    <PluginCard
+                      key={plugin.key}
+                      plugin={plugin}
+                      view={view}
+                      onInstall={(target) => void handleInstallRegistry(target)}
+                      onUpgrade={(target) => void handleUpgradeRegistry(target)}
+                      busy={busy}
+                    />
                   ))}
                 </div>
               </section>
@@ -362,11 +411,65 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
     }
   }
 
+  async function installRegistry(current: MarketplacePlugin) {
+    setBusy("install:" + current.key);
+    setError("");
+    try {
+      await installMarketplacePlugin(client, current);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function upgradeRegistry(current: MarketplacePlugin) {
+    if (!current.updateAvailable) return;
+    if ((current.usageCount ?? 0) > 0) return;
+    setBusy("upgrade:" + current.key);
+    setError("");
+    try {
+      await upgradeMarketplacePlugin(client, current, current.updateAvailable);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
   return (
     <>
       <PageToolbar
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {plugin?.installAction ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy !== ""}
+                onClick={() => void installRegistry(plugin)}
+              >
+                {busy === "install:" + plugin.key ? t("Installing…") : t("Install")}
+              </Button>
+            ) : null}
+            {plugin?.updateAvailable && (plugin.usageCount ?? 0) === 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy !== ""}
+                onClick={() => void upgradeRegistry(plugin)}
+              >
+                {busy === "upgrade:" + plugin.key
+                  ? t("Upgrading…")
+                  : t("Upgrade to {{version}}", { version: plugin.updateAvailable })}
+              </Button>
+            ) : plugin?.updateAvailable && (plugin.usageCount ?? 0) > 0 ? (
+              <span className="text-xs text-muted-foreground mr-1" title={t("Referenced resources block in-place upgrade")}>
+                {t("Referenced resources block in-place upgrade")}
+              </span>
+            ) : null}
             {createAction !== undefined ? (
               <Button
                 type="button"
@@ -502,6 +605,12 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
                 label="Status"
                 value={pluginStatusLabel(plugin)}
               />
+              {plugin.updateAvailable ? (
+                <DetailField label="Update available" value={plugin.updateAvailable} />
+              ) : null}
+              {plugin.updateAvailable && (plugin.usageCount ?? 0) > 0 ? (
+                <DetailField label="In-place upgrade" value={t("Referenced resources block in-place upgrade")} />
+              ) : null}
             </div>
           </DataPanel>
 
@@ -625,7 +734,19 @@ function useMarketplacePlugins(client: ManagementClient) {
   };
 }
 
-function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover"|"installed" }) {
+function PluginCard({
+  plugin,
+  view,
+  onInstall,
+  onUpgrade,
+  busy = "",
+}: {
+  plugin: MarketplacePlugin;
+  view: "discover" | "installed";
+  onInstall?: (plugin: MarketplacePlugin) => void;
+  onUpgrade?: (plugin: MarketplacePlugin) => void;
+  busy?: string;
+}) {
   const Icon = plugin.kind === "agent" ? BotIcon :
     plugin.kind === "sandbox" ? BoxIcon :
     plugin.kind === "tunnel" ? CableIcon :
@@ -633,6 +754,9 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
   const unavailable = ["invalid", "unavailable", "degraded"].includes(plugin.status);
   const detailsHref = `/plugins/${encodeURIComponent(plugin.key)}?view=${view}`;
   const createAction = view === "discover" ? plugin.createAction : undefined;
+  const isInstalling = busy === "install:" + plugin.key;
+  const isUpgrading = busy === "upgrade:" + plugin.key;
+
   return (
     <div className={[
       "group flex min-h-[76px] min-w-0 items-center gap-1 rounded-xl border bg-card pr-2",
@@ -661,6 +785,61 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
           <span className="size-1.5 shrink-0 rounded-full bg-sunlight" title={pluginStatusLabel(plugin)} aria-label={pluginStatusLabel(plugin)} />
         ) : null}
       </Link>
+      {view === "discover" && plugin.installAction ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isInstalling}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onInstall?.(plugin);
+            }}
+          >
+            {isInstalling ? t("Installing…") : t("Install")}
+          </Button>
+          <Link
+            to={detailsHref}
+            aria-label={t("View {{plugin}}", { plugin: plugin.displayName })}
+            title={t("Plugin details")}
+            className="shrink-0 rounded-md px-2 py-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {t("Details")}
+          </Link>
+        </div>
+      ) : null}
+      {view === "installed" && plugin.updateAvailable ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Badge variant="caution" className="text-[10px] px-1.5 py-0.5">
+            {t("Update available")}
+          </Badge>
+          {(plugin.usageCount ?? 0) === 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isUpgrading}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onUpgrade?.(plugin);
+              }}
+            >
+              {isUpgrading ? t("Upgrading…") : t("Upgrade")}
+            </Button>
+          ) : (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0.5"
+              title={t("Referenced resources block in-place upgrade")}
+            >
+              {t("In use")}
+            </Badge>
+          )}
+        </div>
+      ) : null}
       {createAction ? (
         <Link to={detailsHref}
           aria-label={t("View {{plugin}}", { plugin: plugin.displayName })}
@@ -769,6 +948,7 @@ function pluginSourceLabel(plugin:MarketplacePlugin){
   switch(plugin.source){
     case "curated":return t("Curated");
     case "builtin":return t("Built-in");
+    case "registry":return t("Registry");
     case "local":return t("Local package");
     default:return t(plugin.sourceLabel);
   }
