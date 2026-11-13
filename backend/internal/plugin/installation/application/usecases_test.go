@@ -271,6 +271,18 @@ func (r *fakeRepository) Delete(
 	return nil
 }
 
+func (r *fakeRepository) UpdatePackage(
+	_ context.Context,
+	item installationdomain.Installation,
+) error {
+	if _, ok := r.items[item.ID()]; !ok {
+		return ErrInstallationNotFound
+	}
+	r.items[item.ID()] = item
+	r.digest[item.Digest()] = item.ID()
+	return nil
+}
+
 type fakePackageStore struct {
 	installResult ManagedPackage
 	installErr    error
@@ -287,6 +299,14 @@ func (p *fakePackageStore) InstallLocal(
 	_ installationdomain.InstallationID,
 ) (ManagedPackage, error) {
 	p.installCalls++
+	return p.installResult, p.installErr
+}
+
+func (p *fakePackageStore) UpgradeLocal(
+	_ context.Context,
+	_ string,
+	_ installationdomain.InstallationID,
+) (ManagedPackage, error) {
 	return p.installResult, p.installErr
 }
 

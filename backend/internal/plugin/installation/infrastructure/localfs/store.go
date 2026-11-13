@@ -210,6 +210,164 @@ func (s *Store) InstallLocal(
 	}, nil
 }
 
+// UpgradeLocal atomically replaces an existing managed installation package directory with new package contents.
+func (s *Store) UpgradeLocal(
+	ctx context.Context,
+	sourcePath string,
+	id installationdomain.InstallationID,
+) (installationapplication.ManagedPackage, error) {
+	if _, err := installationdomain.ParseInstallationID(id.String()); err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: %w",
+			err,
+		)
+	}
+	if err := s.ensureRoot(); err != nil {
+		return installationapplication.ManagedPackage{}, err
+	}
+
+	source, err := filepath.Abs(strings.TrimSpace(sourcePath))
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: resolve source: %w",
+			err,
+		)
+	}
+	if strings.TrimSpace(sourcePath) == "" {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: source path must not be empty",
+		)
+	}
+	if inside, err := pathWithin(s.root, source); err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: compare source path: %w",
+			err,
+		)
+	} else if inside {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: source must be outside managed plugin root",
+		)
+	}
+
+	sourceInfo, err := os.Lstat(source)
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: source: %w",
+			err,
+		)
+	}
+	if sourceInfo.Mode()&os.ModeSymlink != 0 || !sourceInfo.IsDir() {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: source must be a real directory",
+		)
+	}
+
+	sourceSnapshot, err := s.inspect(ctx, source, nil)
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: inspect source: %w",
+			err,
+		)
+	}
+
+	destination := filepath.Join(s.root, id.String())
+	destInfo, err := os.Lstat(destination)
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: inspect existing installation: %w",
+			err,
+		)
+	}
+	if destInfo.Mode()&os.ModeSymlink != 0 || !destInfo.IsDir() {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: existing installation must be a real directory",
+		)
+	}
+
+	staging, err := os.MkdirTemp(s.root, ".staging-upgrade-"+id.String()+"-")
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: create staging directory: %w",
+			err,
+		)
+	}
+	renamed := false
+	defer func() {
+		if !renamed {
+			_ = makeTreeWritable(staging)
+			_ = os.RemoveAll(staging)
+		}
+	}()
+
+	if err := s.copySnapshot(ctx, source, staging, sourceSnapshot.files); err != nil {
+		return installationapplication.ManagedPackage{}, err
+	}
+	if err := hardenTree(staging, sourceSnapshot.files); err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: harden staging package: %w",
+			err,
+		)
+	}
+
+	stagedSnapshot, err := s.inspect(ctx, staging, nil)
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: verify staging package: %w",
+			err,
+		)
+	}
+	if stagedSnapshot.digest != sourceSnapshot.digest {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: package changed while being copied",
+		)
+	}
+	if stagedSnapshot.parsed.PluginID != sourceSnapshot.parsed.PluginID ||
+		stagedSnapshot.parsed.Version != sourceSnapshot.parsed.Version {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: staged manifest identity changed",
+		)
+	}
+
+	backupDir, err := os.MkdirTemp(s.root, ".backup-"+id.String()+"-")
+	if err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: create backup directory: %w",
+			err,
+		)
+	}
+	_ = os.Remove(backupDir)
+
+	if err := makeTreeWritable(destination); err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: prepare existing destination: %w",
+			err,
+		)
+	}
+	if err := os.Rename(destination, backupDir); err != nil {
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: move existing package: %w",
+			err,
+		)
+	}
+	if err := os.Rename(staging, destination); err != nil {
+		_ = os.Rename(backupDir, destination)
+		return installationapplication.ManagedPackage{}, fmt.Errorf(
+			"upgrade local plugin package: publish package: %w",
+			err,
+		)
+	}
+	renamed = true
+	_ = makeTreeWritable(backupDir)
+	_ = os.RemoveAll(backupDir)
+
+	return installationapplication.ManagedPackage{
+		Manifest:        stagedSnapshot.parsed,
+		ManifestJSON:    append([]byte(nil), stagedSnapshot.manifestJSON...),
+		Digest:          stagedSnapshot.digest,
+		SourceReference: source,
+	}, nil
+}
+
 // Resolve verifies one managed package immediately before process launch.
 func (s *Store) Resolve(
 	ctx context.Context,

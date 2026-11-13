@@ -16,6 +16,7 @@ type Repository interface {
 	List(context.Context) ([]installationdomain.Installation, error)
 	SetStatus(context.Context, installationdomain.InstallationID, installationdomain.Status) error
 	Delete(context.Context, installationdomain.InstallationID) error
+	UpdatePackage(context.Context, installationdomain.Installation) error
 }
 
 // IDGenerator allocates stable installation identities.
@@ -42,6 +43,11 @@ type ResolvedPackage struct {
 // PackageStore owns managed plugin package files.
 type PackageStore interface {
 	InstallLocal(
+		context.Context,
+		string,
+		installationdomain.InstallationID,
+	) (ManagedPackage, error)
+	UpgradeLocal(
 		context.Context,
 		string,
 		installationdomain.InstallationID,

@@ -65,6 +65,62 @@ func TestNewInstallationRejectsManifestMismatchAndInvalidDigest(t *testing.T) {
 	}
 }
 
+func TestNewInstallationAcceptsSourceRegistry(t *testing.T) {
+	t.Parallel()
+
+	id, _ := ParseInstallationID("pinst_0123456789abcdef0123456789abcdef")
+	pluginID, _ := providerplugin.ParseID("dev.example.echo")
+	installed, err := NewInstallation(
+		id,
+		pluginID,
+		"1.2.3",
+		SourceRegistry,
+		"https://registry.mender.io/plugins/dev.example.echo/1.2.3.tar.gz",
+		"sha256:"+strings.Repeat("a", 64),
+		validManifestJSON("dev.example.echo", "1.2.3"),
+		StatusEnabled,
+		time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("NewInstallation(SourceRegistry) error = %v", err)
+	}
+	if installed.SourceKind() != SourceRegistry {
+		t.Fatalf("got sourceKind %q, want %q", installed.SourceKind(), SourceRegistry)
+	}
+}
+
+func TestWithUpgradedPackage(t *testing.T) {
+	t.Parallel()
+
+	base := validInstallation(t)
+	newVersion := "1.3.0"
+	newDigest := "sha256:" + strings.Repeat("b", 64)
+	newManifest := validManifestJSON("dev.example.echo", newVersion)
+
+	upgraded, err := base.WithUpgradedPackage(newVersion, newDigest, newManifest)
+	if err != nil {
+		t.Fatalf("WithUpgradedPackage() error = %v", err)
+	}
+	if upgraded.PackageVersion() != newVersion {
+		t.Fatalf("got version %q, want %q", upgraded.PackageVersion(), newVersion)
+	}
+	if upgraded.Digest() != newDigest {
+		t.Fatalf("got digest %q, want %q", upgraded.Digest(), newDigest)
+	}
+	if upgraded.ID() != base.ID() {
+		t.Fatalf("installation ID changed during upgrade")
+	}
+
+	// Mismatched version
+	if _, err := base.WithUpgradedPackage("1.4.0", newDigest, newManifest); err == nil {
+		t.Fatal("WithUpgradedPackage() accepted mismatched version")
+	}
+	// Invalid digest
+	if _, err := base.WithUpgradedPackage(newVersion, "bad-digest", newManifest); err == nil {
+		t.Fatal("WithUpgradedPackage() accepted invalid digest")
+	}
+}
+
 func TestWithStatusPreservesInstallationIdentity(t *testing.T) {
 	t.Parallel()
 

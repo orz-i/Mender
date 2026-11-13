@@ -253,6 +253,33 @@ func TestInstallLocalHonorsCancelledContext(t *testing.T) {
 	}
 }
 
+func TestUpgradeLocalAtomicallyReplacesPackage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := testStore(t, DefaultLimits())
+	id := testInstallationID(t, "09")
+
+	v1Source := writeTestPackage(t, t.TempDir(), "dev.example.echo", "1.0.0", 0o755)
+	pkg1, err := store.InstallLocal(ctx, v1Source, id)
+	if err != nil {
+		t.Fatalf("InstallLocal() error = %v", err)
+	}
+
+	v2Source := writeTestPackage(t, t.TempDir(), "dev.example.echo", "2.0.0", 0o755)
+	pkg2, err := store.UpgradeLocal(ctx, v2Source, id)
+	if err != nil {
+		t.Fatalf("UpgradeLocal() error = %v", err)
+	}
+
+	if pkg2.Manifest.Version != "2.0.0" {
+		t.Fatalf("upgraded version = %q, want 2.0.0", pkg2.Manifest.Version)
+	}
+	if pkg2.Digest == pkg1.Digest {
+		t.Fatalf("upgraded digest should differ from v1 digest")
+	}
+}
+
 func testStore(t *testing.T, limits Limits) *Store {
 	t.Helper()
 	store, err := newStore(

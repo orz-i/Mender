@@ -26,8 +26,11 @@ import (
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	installationidentity "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/identity"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
 	installationsqlite "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/sqlite"
+	"github.com/orz-i/Mender/backend/internal/registry"
+	registryinfra "github.com/orz-i/Mender/backend/internal/registry/infrastructure"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledelivery "github.com/orz-i/Mender/backend/internal/profile/application/delivery"
@@ -64,6 +67,12 @@ type RuntimeOptions struct {
 	// AgentExecutor is an in-process trusted testing seam; never expose it via
 	// API, Provider config, persisted metadata, or untrusted Tool arguments.
 	AgentExecutor agentapplication.Executor
+
+	ConfigFile         string
+	RegistryEndpoint   string
+	RegistryRootKeyHex string
+	RegistryKeys       map[string]string
+	RegistryHTTPClient registryinfra.HTTPClient
 }
 
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
@@ -79,6 +88,7 @@ type Runtime struct {
 	Sandboxes                   *Sandboxes
 	Workspaces                  *workspaceapp.Registry
 	Agents                      *agentapplication.Service
+	Registry                    *registry.Service
 	RuntimeGovernance           *RuntimeGovernance
 	InvokeTool                  invocationapplication.InvokeTool
 	ListAudit                   auditapplication.ListRecords
@@ -638,6 +648,49 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	tunnelsOwned = false
 	runtimeGovernanceOwned = false
 	sandboxesOwned = false
+
+	loadedRegistry, err := loadRegistryConfig(options)
+	if err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: registry config: %w", err)
+	}
+
+	indexStore, err := registryinfra.OpenIndexStore(ctx, options.DatabasePath)
+	if err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: registry index store: %w", err)
+	}
+
+	registryService := registry.NewService(
+		registry.ServiceConfig{
+			DefaultRegistryID:  "official",
+			DefaultEndpointURL: loadedRegistry.endpoint,
+			StagingDir:         filepath.Join(filepath.Dir(pluginRoot), ".registry-staging"),
+		},
+		loadedRegistry.trustStore,
+		indexStore,
+		registryinfra.NewDownloader(options.RegistryHTTPClient),
+		registryinfra.NewExtractor(),
+		nil,
+		pluginInstallations,
+		pluginPackages,
+		installationidentity.NewGenerator(),
+		runtimePluginUsageChecker{
+			providerConfigs: providerConfigs,
+			sandboxes:       sandboxes,
+			tunnels:         tunnels,
+		},
+		systemClock{},
+	)
+
 	result := &Runtime{
 		Catalog:                     catalog,
 		Credentials:                 credentials,
@@ -649,6 +702,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Sandboxes:                   sandboxes,
 		Workspaces:                  workspaceRegistry,
 		Agents:                      agents,
+		Registry:                    registryService,
 		RuntimeGovernance:           runtimeGovernance,
 		InvokeTool:                  invokeTool,
 		ListAudit:                   auditapplication.NewListRecords(auditStore),
@@ -771,5 +825,8 @@ func (r *Runtime) Close() error {
 		r.audit.Close(),
 		r.Catalog.Close(),
 	)
+	if r.Registry != nil && r.Registry.IndexStore() != nil {
+		errs = append(errs, r.Registry.IndexStore().Close())
+	}
 	return errors.Join(errs...)
 }

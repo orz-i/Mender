@@ -18,7 +18,10 @@ var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 // SourceKind identifies where an immutable package was acquired.
 type SourceKind string
 
-const SourceLocal SourceKind = "local"
+const (
+	SourceLocal    SourceKind = "local"
+	SourceRegistry SourceKind = "registry"
+)
 
 // Status is the administrative availability of a package installation.
 type Status string
@@ -53,7 +56,7 @@ func NewInstallation(id InstallationID, pluginID platformplugin.ID, packageVersi
 	if _, err := platformplugin.ParseID(pluginID.String()); err != nil {
 		return Installation{}, err
 	}
-	if sourceKind != SourceLocal {
+	if sourceKind != SourceLocal && sourceKind != SourceRegistry {
 		return Installation{}, fmt.Errorf("plugin installation: invalid source kind %q", sourceKind)
 	}
 	sourceReference = strings.TrimSpace(sourceReference)
@@ -82,6 +85,26 @@ func NewInstallation(id InstallationID, pluginID platformplugin.ID, packageVersi
 		manifestJSON: bytes.Clone(manifestJSON), artifactManifestName: manifest.FileName,
 		status: status, installedAt: installedAt.UTC(),
 	}, nil
+}
+
+// WithUpgradedPackage updates the version, digest and manifest of an installation during in-place upgrade.
+func (i Installation) WithUpgradedPackage(packageVersion string, digest string, manifestJSON []byte) (Installation, error) {
+	if !digestPattern.MatchString(digest) {
+		return Installation{}, fmt.Errorf("plugin installation: invalid sha256 digest")
+	}
+	m, err := manifest.Parse(manifestJSON)
+	if err != nil {
+		return Installation{}, fmt.Errorf("plugin installation: manifest: %w", err)
+	}
+	if m.PluginID != i.pluginID.String() || m.Version != packageVersion {
+		return Installation{}, fmt.Errorf("plugin installation: manifest identity/version mismatch")
+	}
+	i.packageVersion = packageVersion
+	i.digest = digest
+	i.manifestJSON = bytes.Clone(manifestJSON)
+	i.artifactManifestName = manifest.FileName
+	i.verifiedDescriptor = nil
+	return i, nil
 }
 
 // WithArtifactManifestName restores the location of a migrated package's

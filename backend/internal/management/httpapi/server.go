@@ -22,6 +22,7 @@ import (
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	registrydomain "github.com/orz-i/Mender/backend/internal/registry/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -83,6 +84,10 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/enable", h.enableProviderPluginInstallation)
 	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/disable", h.disableProviderPluginInstallation)
 	h.mux.HandleFunc("DELETE /api/v1/provider-plugin-installations/{installationId}", h.deleteProviderPluginInstallation)
+	h.mux.HandleFunc("POST /api/v1/registry/sync", h.syncRegistry)
+	h.mux.HandleFunc("POST /api/v1/registry/plugins/install", h.installRegistryPlugin)
+	h.mux.HandleFunc("POST /api/v1/registry/plugins/upgrade", h.upgradeRegistryPlugin)
+	h.mux.HandleFunc("GET /api/v1/registry/updates", h.listRegistryUpdates)
 
 	h.mux.HandleFunc("GET /api/v1/skills", h.listSkills)
 	h.mux.HandleFunc("GET /api/v1/skills/{installationId}", h.getSkillInstallation)
@@ -292,6 +297,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, skillapplication.ErrInstallationNotFound),
 		errors.Is(err, skillapplication.ErrDeploymentNotFound),
 		errors.Is(err, tunnelapplication.ErrTunnelNotFound),
+		errors.Is(err, registrydomain.ErrPluginNotFound),
+		errors.Is(err, registrydomain.ErrTargetNotFound),
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
@@ -311,6 +318,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, installationapplication.ErrInstallationConflict),
 		errors.Is(err, installationapplication.ErrPackageAlreadyInstalled),
 		errors.Is(err, installationapplication.ErrInstallationInUse),
+		errors.Is(err, registrydomain.ErrInstallationInUse),
 		errors.Is(err, skillapplication.ErrInstallationConflict),
 		errors.Is(err, skillapplication.ErrPackageAlreadyInstalled),
 		errors.Is(err, skillapplication.ErrInstallationInUse),
@@ -344,6 +352,11 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, providerplugin.ErrUnsupportedConfigVersion),
 		errors.Is(err, providerplugin.ErrInvalidConfiguration),
 		errors.Is(err, skillapplication.ErrInvalidAgentPluginPackage),
+		errors.Is(err, registrydomain.ErrInvalidIndex),
+		errors.Is(err, registrydomain.ErrInvalidSignature),
+		errors.Is(err, registrydomain.ErrAntiFreeze),
+		errors.Is(err, registrydomain.ErrAntiRollback),
+		errors.Is(err, registrydomain.ErrNoTrustedSigner),
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 

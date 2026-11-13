@@ -87,6 +87,54 @@ func (s *Store) Create(
 	return nil
 }
 
+// UpdatePackage updates the version, digest, manifest, and resets descriptor for an in-place upgrade.
+func (s *Store) UpdatePackage(
+	ctx context.Context,
+	installation installationdomain.Installation,
+) error {
+	if err := installation.Validate(); err != nil {
+		return fmt.Errorf("update plugin installation: %w", err)
+	}
+	verifiedDescriptorJSON, err := marshalVerifiedDescriptor(installation)
+	if err != nil {
+		return fmt.Errorf("update plugin installation: verified descriptor: %w", err)
+	}
+	res, err := s.db.ExecContext(
+		ctx,
+		`UPDATE plugin_installations
+		SET package_version = ?,
+			source_kind = ?,
+			source_reference = ?,
+			digest = ?,
+			manifest_json = ?,
+			artifact_manifest_file = ?,
+			verified_descriptor_json = ?
+		WHERE installation_id = ?`,
+		installation.PackageVersion(),
+		string(installation.SourceKind()),
+		installation.SourceReference(),
+		installation.Digest(),
+		string(installation.ManifestJSON()),
+		installation.ArtifactManifestName(),
+		verifiedDescriptorJSON,
+		installation.ID().String(),
+	)
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return installationapplication.ErrInstallationConflict
+		}
+		return fmt.Errorf("update plugin installation: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update plugin installation: check rows affected: %w", err)
+	}
+	if affected == 0 {
+		return installationapplication.ErrInstallationNotFound
+	}
+	return nil
+}
+
 // Get returns one plugin installation by stable installation identity.
 func (s *Store) Get(
 	ctx context.Context,

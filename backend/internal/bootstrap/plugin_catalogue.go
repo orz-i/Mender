@@ -293,7 +293,7 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 				DisplayName: manifest.DisplayName, Description: manifest.Description, ConfigVersion: 1,
 			}
 		}
-		entry := pluginEntry(descriptor, "local", &item, usage[item.PluginID().String()+"@"+item.ID().String()])
+		entry := pluginEntry(descriptor, string(item.SourceKind()), &item, usage[item.PluginID().String()+"@"+item.ID().String()])
 		if !ok {
 			entry.Issue = "No verified extension descriptor; package is unavailable until explicitly verified"
 			entry.Status = "invalid"

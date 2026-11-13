@@ -379,6 +379,54 @@ func testInstallation(
 	return item
 }
 
+func TestStoreUpdatePackage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openTestStore(t)
+	item := testInstallation(
+		t,
+		"pinst_00000000000000000000000000000001",
+		"dev.example.echo",
+		"1.2.3",
+		"a",
+	)
+	if err := store.Create(ctx, item); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	newVersion := "1.3.0"
+	newDigest := "sha256:" + strings.Repeat("b", 64)
+	newManifest := []byte(`{
+		"manifestVersion": 2,
+		"pluginId": "dev.example.echo",
+		"version": "` + newVersion + `",
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
+		"displayName": "Test Plugin",
+		"description": "Test external Provider plugin",
+		"entrypoints": {"linux/amd64": "bin/plugin"}
+	}`)
+	upgraded, err := item.WithUpgradedPackage(newVersion, newDigest, newManifest)
+	if err != nil {
+		t.Fatalf("WithUpgradedPackage() error = %v", err)
+	}
+
+	if err := store.UpdatePackage(ctx, upgraded); err != nil {
+		t.Fatalf("UpdatePackage() error = %v", err)
+	}
+
+	reloaded, err := store.Get(ctx, item.ID())
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if reloaded.PackageVersion() != newVersion {
+		t.Fatalf("reloaded version = %q, want %q", reloaded.PackageVersion(), newVersion)
+	}
+	if reloaded.Digest() != newDigest {
+		t.Fatalf("reloaded digest = %q, want %q", reloaded.Digest(), newDigest)
+	}
+}
+
 func assertInstallationEqual(
 	t *testing.T,
 	got installationdomain.Installation,
