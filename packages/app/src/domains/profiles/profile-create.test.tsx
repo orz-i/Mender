@@ -116,4 +116,25 @@ describe("Profile create page", () => {
     expect(screen.getByText("Profiles inventory")).toBeTruthy();
     expect(createProfile).not.toHaveBeenCalled();
   });
+
+  it("places Display name first and auto-derives Slug until Slug is manually edited", async () => {
+    const { createProfile } = openCreate();
+    const displayNameInput = screen.getByRole<HTMLInputElement>("textbox", { name: "Profile display name" });
+    const slugInput = screen.getByRole<HTMLInputElement>("textbox", { name: "Profile slug" });
+    expect(Boolean(displayNameInput.compareDocumentPosition(slugInput) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    fireEvent.change(displayNameInput, { target: { value: "Team Engineering" } });
+    expect(slugInput.value).toBe("team-engineering");
+    expect(screen.getByText("Result: team-engineering")).toBeTruthy();
+
+    fireEvent.change(slugInput, { target: { value: "eng-custom" } });
+    fireEvent.change(displayNameInput, { target: { value: "Platform Engineering" } });
+    expect(slugInput.value).toBe("eng-custom");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    await waitFor(() => expect(createProfile).toHaveBeenCalledWith({
+      slug: "eng-custom",
+      displayName: "Platform Engineering",
+    }));
+  });
 });

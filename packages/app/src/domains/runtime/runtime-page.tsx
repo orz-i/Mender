@@ -21,7 +21,7 @@ import {
 import { formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
-import { DataPanel } from "../../shared/workbench";
+import { DataPanel, MetricStrip, MetricTile } from "../../shared/workbench";
 import { FormInfo } from "../../shared/form-info";
 
 const budgetFields: Array<{
@@ -214,27 +214,13 @@ export function RuntimePage({ client }: { client: ManagementClient }) {
         </Button>
       </div>
 
-      <section aria-label={t("Runtime summary")} className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2 xl:grid-cols-4">
-        {([
-          { icon: ActivityIcon, label: "In-flight invocations", value: String(status.usage.invocations ?? 0) },
-          { icon: WorkflowIcon, label: "In-flight activations", value: String(status.usage.activations ?? 0) },
-          { icon: BoxesIcon, label: "Isolation backend", value: status.backend.name ?? "—" },
-          { icon: ShieldCheckIcon, label: "Restricted host", value: t(restrictedAvailable ? "Available" : "Unavailable") },
-        ] as const).map(({ icon: Icon, label, value }, i) => (
-          <div key={label} className={[
-            "min-w-0 px-5 py-4",
-            i > 0 ? "border-t border-border sm:border-t-0" : "",
-            i % 2 === 1 ? "sm:border-l" : "",
-            i >= 2 ? "sm:border-t xl:border-t-0" : "",
-            i > 0 ? "xl:border-l" : "",
-          ].join(" ")}>
-            <p className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Icon className="size-4 shrink-0" aria-hidden="true" />
-              {t(label)}
-            </p>
-            <p className="mt-2 truncate text-[22px] leading-7 font-semibold tracking-[-0.02em]" title={value}>{value}</p>
-          </div>
-        ))}
+      <section aria-label={t("Runtime summary")}>
+        <MetricStrip className="mb-0">
+          <MetricTile icon={ActivityIcon} label="In-flight invocations" value={status.usage.invocations ?? 0} />
+          <MetricTile icon={WorkflowIcon} label="In-flight activations" value={status.usage.activations ?? 0} />
+          <MetricTile icon={BoxesIcon} label="Isolation backend" value={status.backend.name ?? "—"} />
+          <MetricTile icon={ShieldCheckIcon} label="Restricted host" value={t(restrictedAvailable ? "Available" : "Unavailable")} />
+        </MetricStrip>
       </section>
 
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2">

@@ -117,4 +117,27 @@ describe("Agent creation form task focus and errors", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review" }).disabled).toBe(false);
   });
+
+  it("allows changing process isolation via the Select control and preserves it through submit", async () => {
+    const createAgent = show("/agents/new?pluginId=io.mender.agent.opencode");
+    fireEvent.change(screen.getByRole("textbox", { name: "Agent name" }), { target: { value: "Host Agent" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Workspace directory" }), { target: { value: "/tmp/host-agent" } });
+    const trigger = screen.getByRole("combobox", { name: "Process isolation" });
+    fireEvent.click(trigger);
+    const hostOption = await screen.findByRole("option", { name: "Host (not isolated)" });
+    fireEvent.pointerDown(hostOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.pointerUp(hostOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.click(hostOption);
+    expect(screen.getByRole("note").textContent).toContain("Host mode can access files and credentials");
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(screen.getByText("Host (not isolated)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save configuration" }));
+    await waitFor(() => expect(createAgent).toHaveBeenCalledWith({
+      name: "Host Agent",
+      backend: "opencode",
+      workspaceRoot: "/tmp/host-agent",
+      isolation: "host",
+      defaultModel: "",
+    }));
+  });
 });

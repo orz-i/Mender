@@ -130,7 +130,7 @@ function BackendChoice({
     </>
   );
   const classes =
-    "flex min-h-44 min-w-0 flex-col items-start rounded-[20px] border border-border bg-background/60 p-5 text-left text-sm transition-[border-color,box-shadow,background-color]";
+    "flex min-h-44 min-w-0 flex-col items-start rounded-xl border border-border bg-background/60 p-5 text-left text-sm transition-[border-color,box-shadow,background-color]";
 
   if (!onClick) {
     return (

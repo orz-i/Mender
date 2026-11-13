@@ -3,6 +3,13 @@ import { Navigate, useNavigate, useSearchParams } from "react-router";
 import type { ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mender/ui/components/select";
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { FormInfo } from "../../shared/form-info";
@@ -126,11 +133,29 @@ function AgentCreateForm({
               <label htmlFor="agent-isolation" className="text-sm font-medium">{t("Process isolation")}</label>
               <FormInfo label={t("Process isolation")}>{t("The isolation setting controls which host files and credentials the Agent process can access.")}</FormInfo>
             </div>
-            <select id="agent-isolation" value={isolation} onChange={e=>{setIsolation(e.target.value as typeof isolation);setError("");}}
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm">
-              <option value="restricted_host">{t("Restricted host")}</option>
-              <option value="host">{t("Host (not isolated)")}</option>
-            </select>
+            <Select
+              value={isolation}
+              onValueChange={(next) => {
+                if (next === "restricted_host" || next === "host") {
+                  setIsolation(next);
+                  setError("");
+                }
+              }}
+            >
+              <SelectTrigger
+                id="agent-isolation"
+                aria-label={t("Process isolation")}
+                className="h-10 w-full rounded-xl bg-background px-3"
+              >
+                <SelectValue>
+                  {isolation === "host" ? t("Host (not isolated)") : t("Restricted host")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="restricted_host">{t("Restricted host")}</SelectItem>
+                <SelectItem value="host">{t("Host (not isolated)")}</SelectItem>
+              </SelectContent>
+            </Select>
             {isolation==="host" ? <p role="note" className="text-xs font-medium">{t("Host mode can access files and credentials with the Runtime user's permissions.")}</p> : null}
             {backend==="antigravity"?
               <FormInfo label={t("Antigravity permissions")}>{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</FormInfo>:null}

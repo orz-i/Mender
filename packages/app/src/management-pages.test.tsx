@@ -27,6 +27,24 @@ function expectAnchoredDialog(title: string) {
   expect(dialog.querySelector('[data-slot="dialog-footer"]')).toBeTruthy();
 }
 
+async function selectComboboxOption(label: string, optionLabel: string) {
+  fireEvent.click(screen.getByRole("combobox", { name: label }));
+  const option = await screen.findByRole("option", { name: optionLabel });
+  fireEvent.pointerDown(option, {
+    pointerId: 1,
+    pointerType: "mouse",
+    button: 0,
+    isPrimary: true,
+  });
+  fireEvent.pointerUp(option, {
+    pointerId: 1,
+    pointerType: "mouse",
+    button: 0,
+    isPrimary: true,
+  });
+  fireEvent.click(option);
+}
+
 describe("management pages", () => {
   it("shows AnySearch as a service then only AnySearch Tools on drilldown",async()=>{
     const anySearch={
@@ -1745,7 +1763,6 @@ describe("management pages", () => {
       screen.getByRole("columnheader", { name: "Actions" }),
     ).toBeTruthy();
 
-        fireEvent.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => {
       expect(browseTools).toHaveBeenLastCalledWith({
         limit: 100,
@@ -2394,9 +2411,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(await screen.findByText("Edit default decision")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText("Default Policy decision"), {
-      target: { value: "deny" },
-    });
+    await selectComboboxOption("Default Policy decision", "deny");
     fireEvent.click(screen.getByRole("button", { name: "Save default" }));
     await waitFor(() => {
       expect(setPolicyDefault).toHaveBeenCalledWith({ decision: "deny" });
@@ -2410,9 +2425,7 @@ describe("management pages", () => {
     fireEvent.change(screen.getByLabelText("Policy Rule display name"), {
       target: { value: "Approve MCP search" },
     });
-    fireEvent.change(screen.getByLabelText("Policy Rule decision"), {
-      target: { value: "require_approval" },
-    });
+    await selectComboboxOption("Policy Rule decision", "require approval");
     expect(screen.getByText(/Approval adapter is fail-closed/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
@@ -2440,9 +2453,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText("Governance Facts")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Policy fact knowledge"), {
-      target: { value: "unknown" },
-    });
+    await selectComboboxOption("Policy fact knowledge", "unknown");
     expect(screen.queryByLabelText("Policy effects")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Create rule" }));
 

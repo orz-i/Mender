@@ -639,4 +639,13 @@ describe("Agents focused management",()=>{
     // Seamlessly transitions into viewing the created task
     expect(await screen.findByText("atask_created_interactive_1")).toBeTruthy();
   });
+
+  it("replaces duplicate overview configuration details with a summary row linking to Configuration", async () => {
+    show("/agents/" + agent.agentId);
+    expect(await screen.findByText("Agent configuration")).toBeTruthy();
+    expect(document.querySelector("details")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "View configuration" }));
+    expect(screen.getByRole("button", { name: "Configuration" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("/tmp/mender-agent-fixture")).toBeTruthy();
+  });
 });

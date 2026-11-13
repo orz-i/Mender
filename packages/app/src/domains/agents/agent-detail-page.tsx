@@ -391,11 +391,21 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
           <Button size="sm" variant="outline" onClick={() => setTopic("tasks")}>{t("Review tasks")}</Button>
         </div>
       ) : null}
-      {!agent.backendAvailable || tools?.status === "conflict" ? (
+      {!agent.backendAvailable || agent.issue || tools?.status === "conflict" ? (
         <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/25 px-4 py-3">
-          <p className="text-xs leading-5 text-muted-foreground">
-            {!agent.backendAvailable ? t("CLI missing") : t("Agent tool sources conflict; review them in Tools before proceeding.")}
-          </p>
+          <div className="min-w-0 space-y-0.5">
+            {!agent.backendAvailable ? (
+              <p className="text-xs font-medium leading-5 text-foreground">{t("CLI missing")}</p>
+            ) : null}
+            {agent.issue ? (
+              <p className="text-xs leading-5 text-destructive">{agent.issue}</p>
+            ) : null}
+            {tools?.status === "conflict" ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                {t("Agent tool sources conflict; review them in Tools before proceeding.")}
+              </p>
+            ) : null}
+          </div>
           {tools?.status === "conflict" ? <Button size="sm" variant="outline" onClick={() => void navigate("/tools")}>{t("View tool services")}</Button> : null}
         </div>
       ) : null}
@@ -428,15 +438,21 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
           </p>
         )}
       </section>
-      <details className="group border-t border-border">
-        <summary className="cursor-pointer px-4 py-3.5 text-[13px] font-medium text-foreground hover:bg-muted/35 focus-visible:outline-2 focus-visible:outline-ring">
-          {t("Agent configuration")}
-          <span className="ml-2 text-[11px] font-normal text-muted-foreground">{t("Model, workspace, isolation and advanced actions")}</span>
-        </summary>
-        <div className="border-t border-border/75">
-          {configuration}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3.5">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[13px] font-semibold text-foreground">{t("Agent configuration")}</p>
+            <span className="truncate text-xs text-muted-foreground">{agent.name}</span>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {agentBackendLabel(agent.backend)} · {agent.isolation === "host" ? t("Host (not isolated)") : t("Restricted host")} · {agent.defaultModel || t("Use Agent default")}
+          </p>
         </div>
-      </details>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setTopic("configuration")}>{t("View configuration")}</Button>
+        </div>
+      </div>
     </ResultPanel>:
     topic==="configuration"?<ResultPanel title="Agent configuration">{configuration}</ResultPanel>:
     topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}

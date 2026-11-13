@@ -16,6 +16,7 @@ export function ProfileCreatePage({ client }: { client: ManagementClient }) {
   const [form, setForm] = useState({
     slug: "", displayName: "",
   });
+  const [slugEdited, setSlugEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,10 +53,31 @@ export function ProfileCreatePage({ client }: { client: ManagementClient }) {
           onSubmit={(event) => { event.preventDefault(); void create(); }}>
           {error ? <ErrorNotice message={error} /> : null}
           <div className="flex flex-col gap-2">
+            <label htmlFor="profile-name" className="text-sm font-medium">{t("Display name")}</label>
+            <Input id="profile-name" aria-label={t("Profile display name")} autoFocus value={form.displayName}
+              aria-invalid={form.displayName.trim() !== "" && !nameValid}
+              onChange={(event) => {
+                const displayName = event.target.value;
+                setError("");
+                setForm((current) => ({
+                  ...current,
+                  displayName,
+                  slug: slugEdited ? current.slug : canonicalizeOwnedIdentifier(displayName),
+                }));
+              }} />
+            {form.displayName.trim() !== "" && !nameValid ? <p role="alert" className="text-xs text-destructive">
+              {t("Display name is too long (maximum 160 bytes).")}
+            </p> : null}
+          </div>
+          <div className="flex flex-col gap-2">
             <label htmlFor="profile-slug" className="text-sm font-medium">{t("Slug")}</label>
             <Input id="profile-slug" aria-label={t("Profile slug")} placeholder={t("default")}
-              autoFocus value={form.slug} aria-invalid={form.slug.trim() !== "" && !slugValid}
-              onChange={(event) => { setError(""); setForm((current) => ({ ...current, slug: event.target.value })); }} />
+              value={form.slug} aria-invalid={form.slug.trim() !== "" && !slugValid}
+              onChange={(event) => {
+                setError("");
+                setSlugEdited(true);
+                setForm((current) => ({ ...current, slug: event.target.value }));
+              }} />
             <p className="text-xs text-muted-foreground">
               {t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}
             </p>
@@ -63,15 +85,6 @@ export function ProfileCreatePage({ client }: { client: ManagementClient }) {
               className={slugValid ? "break-all font-mono text-xs" : "text-xs text-destructive"}>
               {slugValid ? t("Result: {{value}}", { value: slug })
                 : t("Use 1–63 characters, starting with a letter and ending with a letter or digit; only lowercase letters, digits and hyphens are allowed.")}
-            </p> : null}
-          </div>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="profile-name" className="text-sm font-medium">{t("Display name")}</label>
-            <Input id="profile-name" aria-label={t("Profile display name")} value={form.displayName}
-              aria-invalid={form.displayName.trim() !== "" && !nameValid}
-              onChange={(event) => { setError(""); setForm((current) => ({ ...current, displayName: event.target.value })); }} />
-            {form.displayName.trim() !== "" && !nameValid ? <p role="alert" className="text-xs text-destructive">
-              {t("Display name is too long (maximum 160 bytes).")}
             </p> : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-5">

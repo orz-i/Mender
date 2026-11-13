@@ -4,6 +4,13 @@ import { BoxIcon, FolderOpenIcon } from "lucide-react";
 
 import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mender/ui/components/select";
 
 import { t } from "../../i18n/i18n";
 import { useDesktopHost } from "../../shell/desktop-host-context";
@@ -19,6 +26,16 @@ import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-dis
 
 export { CreateSandboxPage } from "./sandbox-create-page";
 export { SandboxDetailPage } from "./sandbox-detail-page";
+
+const backendOptions = [
+  { value: "all", label: "All backends" },
+  { value: "local_workspace", label: "Local workspace" },
+  { value: "docker", label: "Docker" },
+  { value: "daytona", label: "Daytona" },
+  { value: "ssh_remote", label: "SSH Remote" },
+  { value: "e2b", label: "E2B" },
+  { value: "external", label: "External plugin" },
+] as const;
 
 export function SandboxesPage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
@@ -72,20 +89,20 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
           <div className="w-full min-w-0 sm:w-44 sm:shrink-0">
             <SearchField label="Search sandboxes" placeholder="Search sandboxes" value={query} onChange={setQuery} />
           </div>
-          <select
-            aria-label={t("Backend filter")}
-            value={backend}
-            onChange={(event) => setBackend(event.target.value)}
-            className="h-9 w-36 min-w-0 rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="all">{t("All backends")}</option>
-            <option value="local_workspace">{t("Local workspace")}</option>
-            <option value="docker">{t("Docker")}</option>
-            <option value="daytona">{t("Daytona")}</option>
-            <option value="ssh_remote">{t("SSH Remote")}</option>
-            <option value="e2b">{t("E2B")}</option>
-            <option value="external">{t("External plugin")}</option>
-          </select>
+          <Select value={backend} onValueChange={(next) => setBackend(String(next))}>
+            <SelectTrigger aria-label={t("Backend filter")} className="h-9 w-36 min-w-0 bg-card">
+              <SelectValue>
+                {t(backendOptions.find((option) => option.value === backend)?.label ?? "All backends")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {backendOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {t(option.label)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </>
       }
       actions={<Button size="sm" onClick={() => void navigate("/sandboxes/new")}>{t("Create sandbox")}</Button>}

@@ -30,11 +30,15 @@ describe("Policy modal mutation errors", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = screen.getByRole("dialog", { name: "Edit default decision" });
-    fireEvent.change(within(dialog).getByLabelText("Default Policy decision"), { target: { value: "deny" } });
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Default Policy decision" }));
+    const denyOption = await screen.findByRole("option", { name: "deny" });
+    fireEvent.pointerDown(denyOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.pointerUp(denyOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.click(denyOption);
     fireEvent.click(within(dialog).getByRole("button", { name: "Save default" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveProperty("textContent", "Default decision save failed");
-    expect(within(dialog).getByLabelText<HTMLSelectElement>("Default Policy decision").value).toBe("deny");
+    expect(within(dialog).getByRole("combobox", { name: "Default Policy decision" }).textContent).toContain("deny");
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     fireEvent.click(within(dialog).getByRole("button", { name: "Save default" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit default decision" })).toBeNull());
@@ -90,5 +94,55 @@ describe("Policy modal mutation errors", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     expect(within(screen.getByRole("dialog", { name: "Add Policy rule" })).queryByRole("alert")).toBeNull();
+  });
+
+  it("confirms rule deletion in an in-app dialog instead of window.confirm", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockImplementation(() => {
+      throw new Error("window.confirm must not be called");
+    });
+    const rule = {
+      ruleId: "rule_1",
+      displayName: "Block external shell",
+      enabled: true,
+      decision: "deny" as const,
+      match: {
+        actions: ["tool.invoke" as const],
+        origins: [],
+        principalKinds: [],
+        principalRefs: [],
+        scopeKinds: [],
+        profileRefs: [],
+        providerIds: [],
+        toolIds: [],
+        factKnowledge: "any" as const,
+        effectsAny: [],
+        resourcesAny: [],
+      },
+    };
+    const deletePolicyRule = vi.fn().mockResolvedValue(undefined);
+    const getPolicy = vi.fn()
+      .mockResolvedValueOnce({ defaultDecision: "allow", rules: [rule] })
+      .mockResolvedValue({ defaultDecision: "allow", rules: [] });
+    try {
+      renderPolicy({ getPolicy, deletePolicyRule });
+      expect(await screen.findByText("Block external shell")).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      const confirmDialog = screen.getByRole("dialog", { name: "Delete Policy Rule" });
+      expect(within(confirmDialog).getByText('Delete Policy Rule "Block external shell"?')).toBeTruthy();
+      expect(deletePolicyRule).not.toHaveBeenCalled();
+
+      fireEvent.click(within(confirmDialog).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog", { name: "Delete Policy Rule" })).toBeNull();
+      expect(deletePolicyRule).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      const confirmDialogAgain = screen.getByRole("dialog", { name: "Delete Policy Rule" });
+      fireEvent.click(within(confirmDialogAgain).getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(deletePolicyRule).toHaveBeenCalledWith("rule_1"));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete Policy Rule" })).toBeNull());
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 });

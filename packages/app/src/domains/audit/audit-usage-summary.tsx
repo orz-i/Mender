@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { ActivityIcon, AlertTriangleIcon, CheckCircle2Icon, WrenchIcon } from "lucide-react";
 import type { AuditRecord } from "@mender/sdk";
-import { formatNumber, t } from "../../i18n/i18n";
+import { t } from "../../i18n/i18n";
+import { MetricStrip, MetricTile } from "../../shared/workbench";
 
 type DayUsage = { key: string; count: number; dateLabel: string };
 
@@ -65,22 +67,12 @@ export function AuditUsageSummary({
           ) : null}
         </div>
       </div>
-      <div className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4">
-        {([
-          { label: "Observed calls", value: usage.count },
-          { label: "Completed", value: usage.completed },
-          { label: "Failed or denied", value: usage.other },
-          { label: "Distinct tools", value: usage.tools },
-        ] as const).map(({ label, value }, i) => (
-          <div key={label} className={[
-            "min-w-0 px-5 py-4",
-            i > 0 ? "border-t border-border sm:border-t-0 sm:border-l" : "",
-          ].join(" ")}>
-            <p className="truncate text-[12px] text-muted-foreground">{t(label)}</p>
-            <p className="mt-1.5 text-[24px] leading-7 font-semibold tracking-[-0.03em] tabular-nums">{formatNumber(value)}</p>
-          </div>
-        ))}
-        <div className="col-span-full border-t border-border px-5 pt-5 pb-4">
+      <MetricStrip className="mb-0">
+        <MetricTile icon={ActivityIcon} label="Observed calls" value={usage.count} />
+        <MetricTile icon={CheckCircle2Icon} label="Completed" value={usage.completed} />
+        <MetricTile icon={AlertTriangleIcon} label="Failed or denied" value={usage.other} />
+        <MetricTile icon={WrenchIcon} label="Distinct tools" value={usage.tools} />
+        <div className="col-span-full bg-card px-5 pt-5 pb-4">
           <div role="img" aria-label={t("Recorded invocations by day in the latest sample")}
             className="flex h-[144px] items-end gap-[5px] sm:gap-[9px]">
             {usage.days.map((day) => (
@@ -101,7 +93,7 @@ export function AuditUsageSummary({
             ))}
           </div>
         </div>
-      </div>
+      </MetricStrip>
     </section>
   );
 }

@@ -299,9 +299,11 @@ it("paginates 105 Tools inside one source and never drops other selected sources
     sourceId: "provider:prov_0", limit: 100, cursor: "source-page-two",
   }));
   await vi.waitFor(() => expect(within(picker).queryByRole("button", { name: "Load more tools" })).toBeNull());
-  fireEvent.change(within(picker).getByRole("combobox", { name: "Catalog Tools rows per page" }), {
-    target: { value: "50" },
-  });
+  fireEvent.click(within(picker).getByRole("combobox", { name: "Catalog Tools rows per page" }));
+  const pageSizeOption = await screen.findByRole("option", { name: "50" });
+  fireEvent.pointerDown(pageSizeOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+  fireEvent.pointerUp(pageSizeOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+  fireEvent.click(pageSizeOption);
   fireEvent.click(within(picker).getByRole("button", { name: "Catalog Tools next page" }));
   fireEvent.click(within(picker).getByRole("button", { name: "Catalog Tools next page" }));
   fireEvent.click(await within(picker).findByRole("checkbox", { name: "Select Work tool 105" }));

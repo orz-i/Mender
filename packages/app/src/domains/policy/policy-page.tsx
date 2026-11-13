@@ -29,6 +29,13 @@ import {
 } from "@mender/ui/components/dialog";
 import { Input } from "@mender/ui/components/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mender/ui/components/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -98,6 +105,29 @@ const scopeOptions: Array<{
   { value: "profile", label: "Profile" },
 ];
 
+const decisionOptions: Array<{ value: PolicyDecision; label: string }> = [
+  { value: "allow", label: "allow" },
+  { value: "require_approval", label: "require approval" },
+  { value: "deny", label: "deny" },
+];
+
+const factKnowledgeOptions: Array<{
+  value: PolicyRuleInput["match"]["factKnowledge"];
+  label: string;
+}> = [
+  { value: "any", label: "any" },
+  { value: "known", label: "known" },
+  { value: "unknown", label: "unknown" },
+];
+
+const resourceOperatorOptions: Array<{
+  value: PolicyRuleInput["match"]["resourcesAny"][number]["operator"];
+  label: string;
+}> = [
+  { value: "exact", label: "exact" },
+  { value: "prefix", label: "prefix" },
+];
+
 function emptyRuleForm(): PolicyRuleInput {
   return {
     displayName: "",
@@ -134,6 +164,7 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
   const [defaultDecision, setDefaultDecision] =
     useState<PolicyDecision>("allow");
   const [editor, setEditor] = useState<RuleEditorState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PolicyRule | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -205,6 +236,7 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
       return;
     }
     setEditor(null);
+    setDeleteTarget(null);
     setDialogError("");
     setDefaultDecision(policy.defaultDecision);
     setDefaultOpen(true);
@@ -226,6 +258,7 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
 
   function openCreateRule() {
     setDefaultOpen(false);
+    setDeleteTarget(null);
     setDialogError("");
     setEditor({
       ruleId: "",
@@ -236,6 +269,7 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
 
   function openEditRule(rule: PolicyRule) {
     setDefaultOpen(false);
+    setDeleteTarget(null);
     setDialogError("");
     setEditor({
       ruleId: rule.ruleId,
@@ -299,20 +333,15 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
   }
 
   async function removeRule(rule: PolicyRule) {
-    if (
-      !window.confirm(
-        t('Delete Policy Rule "{{name}}"?', { name: rule.displayName }),
-      )
-    ) {
-      return;
-    }
     setBusy(rule.ruleId);
+    setDialogError("");
     setError("");
     try {
       await client.deletePolicyRule(rule.ruleId);
+      setDeleteTarget(null);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setDialogError(errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -409,7 +438,7 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
                           variant="destructive"
                           label={t("Delete")}
                           disabled={busy !== ""}
-                          onClick={() => void removeRule(rule)}
+                          onClick={() => { setDialogError(""); setDeleteTarget(rule); }}
                         >
                           <Trash2Icon />
                         </IconButton>
@@ -443,19 +472,13 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
               {t("This decision applies only when no enabled Policy Rule matches.")}
             </DialogDescription>
           </DialogHeader>
-          <Field label="Default decision">
-            <select
-              aria-label={t("Default Policy decision")}
+          <Field label="Default decision" as="div">
+            <PolicySelect
+              label={t("Default Policy decision")}
               value={defaultDecision}
-              onChange={(event) =>
-                setDefaultDecision(event.target.value as PolicyDecision)
-              }
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-            >
-              <option value="allow">{t("allow")}</option>
-              <option value="require_approval">{t("require approval")}</option>
-              <option value="deny">{t("deny")}</option>
-            </select>
+              options={decisionOptions}
+              onValueChange={setDefaultDecision}
+            />
           </Field>
           {defaultDecision === "require_approval" ? (
             <ApprovalWarning />
@@ -467,6 +490,51 @@ export function PolicyPage({ client }: { client: ManagementClient }) {
             </Button>
             <Button disabled={busy !== ""} onClick={() => void saveDefault()}>
               {t(busy === "default" ? "Saving…" : "Save default")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && busy === "") {
+            setDialogError("");
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Delete Policy Rule")}</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? t('Delete Policy Rule "{{name}}"?', { name: deleteTarget.displayName })
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {dialogError ? <p role="alert" className="max-h-24 overflow-y-auto break-words text-sm text-destructive">{dialogError}</p> : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy !== ""}
+              onClick={() => {
+                setDialogError("");
+                setDeleteTarget(null);
+              }}
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy !== "" || !deleteTarget}
+              onClick={() => {
+                if (deleteTarget) void removeRule(deleteTarget);
+              }}
+            >
+              {t("Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -654,22 +722,13 @@ function DecisionStep({
           }
         />
       </Field>
-      <Field label="Decision">
-        <select
-          aria-label={t("Policy Rule decision")}
+      <Field label="Decision" as="div">
+        <PolicySelect
+          label={t("Policy Rule decision")}
           value={form.decision}
-          onChange={(event) =>
-            onChange({
-              ...form,
-              decision: event.target.value as PolicyDecision,
-            })
-          }
-          className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-        >
-          <option value="allow">{t("allow")}</option>
-          <option value="require_approval">{t("require approval")}</option>
-          <option value="deny">{t("deny")}</option>
-        </select>
+          options={decisionOptions}
+          onValueChange={(decision) => onChange({ ...form, decision })}
+        />
       </Field>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -904,13 +963,12 @@ function FactsStep({
 
   return (
     <div className="space-y-5">
-      <Field label="Fact knowledge">
-        <select
-          aria-label={t("Policy fact knowledge")}
+      <Field label="Fact knowledge" as="div">
+        <PolicySelect
+          label={t("Policy fact knowledge")}
           value={form.match.factKnowledge}
-          onChange={(event) => {
-            const factKnowledge = event.target
-              .value as PolicyRuleInput["match"]["factKnowledge"];
+          options={factKnowledgeOptions}
+          onValueChange={(factKnowledge) =>
             onChange({
               ...form,
               match: {
@@ -920,14 +978,9 @@ function FactsStep({
                   ? { effectsAny: [], resourcesAny: [] }
                   : {}),
               },
-            });
-          }}
-          className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-        >
-          <option value="any">{t("any")}</option>
-          <option value="known">{t("known")}</option>
-          <option value="unknown">{t("unknown")}</option>
-        </select>
+            })
+          }
+        />
       </Field>
 
       <p className="text-xs leading-5 text-muted-foreground">
@@ -1008,13 +1061,12 @@ function FactsStep({
                     }
                   />
                 </Field>
-                <Field label="Operator">
-                  <select
-                    aria-label={
-                      "Policy resource operator " + String(index + 1)
-                    }
+                <Field label="Operator" as="div">
+                  <PolicySelect
+                    label={"Policy resource operator " + String(index + 1)}
                     value={resource.operator}
-                    onChange={(event) =>
+                    options={resourceOperatorOptions}
+                    onValueChange={(operator) =>
                       onChange({
                         ...form,
                         match: {
@@ -1022,21 +1074,13 @@ function FactsStep({
                           resourcesAny: form.match.resourcesAny.map(
                             (item, itemIndex) =>
                               itemIndex === index
-                                ? {
-                                    ...item,
-                                    operator: event.target
-                                      .value as PolicyRuleInput["match"]["resourcesAny"][number]["operator"],
-                                  }
+                                ? { ...item, operator }
                                 : item,
                           ),
                         },
                       })
                     }
-                    className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
-                  >
-                    <option value="exact">{t("exact")}</option>
-                    <option value="prefix">{t("prefix")}</option>
-                  </select>
+                  />
                 </Field>
                 <Field label="Value">
                   <Input
@@ -1220,17 +1264,48 @@ function ApprovalWarning() {
   );
 }
 
+function PolicySelect<T extends string>({
+  label,
+  value,
+  options,
+  onValueChange,
+}: {
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onValueChange: (value: T) => void;
+}) {
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
+  return (
+    <Select value={value} onValueChange={(next) => onValueChange(next as T)}>
+      <SelectTrigger aria-label={label} className="w-full bg-background">
+        <SelectValue>{t(selectedLabel)}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {t(option.label)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function Field({
   label,
   optional = false,
+  as = "label",
   children,
 }: {
   label: string;
   optional?: boolean;
+  as?: "label" | "div";
   children: React.ReactNode;
 }) {
+  const Wrapper = as;
   return (
-    <label className="block">
+    <Wrapper className="block">
       <span className="mb-1.5 flex items-center gap-2 text-sm font-medium">
         {t(label)}
         {optional ? (
@@ -1240,7 +1315,7 @@ function Field({
         ) : null}
       </span>
       {children}
-    </label>
+    </Wrapper>
   );
 }
 

@@ -108,6 +108,21 @@ describe("SandboxesPage resource rows", () => {
     expect(screen.queryByText("Container Environment")).toBeNull();
   });
 
+  it("filters sandboxes by backend select", async () => {
+    mount();
+    expect(await screen.findByText("Primary Workspace")).toBeTruthy();
+    expect(screen.getByText("Container Environment")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Backend filter" }));
+    const dockerOption = await screen.findByRole("option", { name: "Docker" });
+    fireEvent.pointerDown(dockerOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.pointerUp(dockerOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.click(dockerOption);
+
+    expect(screen.queryByText("Primary Workspace")).toBeNull();
+    expect(screen.getByText("Container Environment")).toBeTruthy();
+  });
+
   it("displays empty state when inventory has no items", async () => {
     mount([]);
     expect(await screen.findByText("No sandboxes")).toBeTruthy();
