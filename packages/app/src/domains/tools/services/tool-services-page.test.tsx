@@ -34,12 +34,17 @@ const samplePlugin: ProviderPlugin = {
   capabilities: ["mcp.tools"],
 };
 
-function mount(providers: Provider[] = [sampleProvider], plugins: ProviderPlugin[] = [samplePlugin]) {
+function mount(
+  providers: Provider[] = [sampleProvider],
+  plugins: ProviderPlugin[] = [samplePlugin],
+  overrides: Partial<ManagementClient> = {},
+) {
   const client = {
     listProviders: vi.fn().mockResolvedValue({ providers }),
     listProviderPlugins: vi.fn().mockResolvedValue({ plugins, issues: [] }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
+    ...overrides,
   } as unknown as ManagementClient;
 
   render(
@@ -61,23 +66,57 @@ afterEach(() => {
 });
 
 describe("Tool services resource rows", () => {
-  it("shows a named service row with real management actions", async () => {
+  it("shows a named service row with inline sync/view-tools actions and popover management actions", async () => {
     mount();
     const link=await screen.findByRole("link",{name:"Echo Service"});
     expect(link.getAttribute("href")).toBe("/tools/prov_echo_01");
     const card=link.closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText("5 tools")).toBeTruthy();
+    expect(card!.querySelector(".bg-teal")).toBeTruthy();
     expect(within(card!).queryByText("Model Context Protocol")).toBeNull();
-    expect(screen.queryByRole("button",{name:"View tools"})).toBeNull();
+    const viewToolsLink = within(card!).getByRole("link", { name: "View tools" });
+    expect(viewToolsLink.getAttribute("href")).toBe("/tools/prov_echo_01");
+    expect(within(card!).getByRole("button", { name: "Sync Echo Service" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Tool services pagination" })).toBeNull();
     expect(within(card!).queryByRole("button",{name:"View Echo Service"})).toBeNull();
     fireEvent.click(within(card!).getByRole("button",{name:"Actions: Echo Service"}));
     expect(await screen.findByRole("button",{name:"View Echo Service"})).toBeTruthy();
     expect(screen.getByRole("button",{name:"Edit Echo Service"})).toBeTruthy();
-    expect(screen.getByRole("button",{name:"Sync Echo Service"})).toBeTruthy();
     expect(screen.getByRole("button",{name:"Delete Echo Service"})).toBeTruthy();
     expect(screen.queryByRole("button",{name:"Show internal providers"})).toBeNull();
+  });
+
+  it("confirms provider deletion via an in-app dialog instead of window.confirm", async () => {
+    const deleteProvider = vi.fn().mockResolvedValue({});
+    const confirmSpy = vi.spyOn(window, "confirm").mockImplementation(() => {
+      throw new Error("native confirm must not be called");
+    });
+    try {
+      mount([sampleProvider], [samplePlugin], { deleteProvider });
+      const card = (await screen.findByRole("link", { name: "Echo Service" }))
+        .closest<HTMLElement>('[role="listitem"]');
+      expect(card).toBeTruthy();
+
+      fireEvent.click(within(card!).getByRole("button", { name: "Actions: Echo Service" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Delete Echo Service" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "Delete Echo Service" });
+      expect(within(dialog).getByText('Delete provider "echo_service"? Profile references will block deletion.')).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete Echo Service" })).toBeNull());
+      expect(deleteProvider).not.toHaveBeenCalled();
+
+      fireEvent.click(within(card!).getByRole("button", { name: "Actions: Echo Service" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Delete Echo Service" }));
+      const confirmDialog = await screen.findByRole("dialog", { name: "Delete Echo Service" });
+      fireEvent.click(within(confirmDialog).getByRole("button", { name: "Delete" }));
+
+      await waitFor(() => expect(deleteProvider).toHaveBeenCalledWith("prov_echo_01"));
+      expect(confirmSpy).not.toHaveBeenCalled();
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 });
 
@@ -89,7 +128,7 @@ describe("Tool service low-noise empty and active states", () => {
     expect(card).toBeTruthy();
     expect(card!.querySelector('[data-slot="card-description"]')).toBeNull();
     expect(within(card!).getByText("5 tools")).toBeTruthy();
-    expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
+    expect(within(card!).getByRole("link", { name: "View tools" })).toBeTruthy();
     expect(within(card!).getByRole("button", { name: "Actions: Echo Service" })).toBeTruthy();
   });
 
@@ -99,11 +138,11 @@ describe("Tool service low-noise empty and active states", () => {
       .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText("0 tools")).toBeTruthy();
+    expect(card!.querySelector(".bg-teal")).toBeNull();
     expect(within(card!).getByText("No tools have been discovered for this service yet.")).toBeTruthy();
-    expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
+    expect(within(card!).getByRole("button", { name: "Sync Echo Service" })).toBeTruthy();
     fireEvent.click(within(card!).getByRole("button", { name: "Actions: Echo Service" }));
-    expect(await screen.findByRole("button", { name: "Sync Echo Service" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit Echo Service" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Edit Echo Service" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Echo Service" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "View Echo Service" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "View Echo Service" }));

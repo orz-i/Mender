@@ -38,7 +38,11 @@ it("shows the 101st service Tool after a bounded continuation, not client-side f
     limit:100,sourceId:"provider:prov_1",cursor:"browse-page-two",
   }));
   await waitFor(()=>expect(screen.queryByRole("button",{name:"Load more tools"})).toBeNull());
-  fireEvent.change(screen.getByRole("combobox",{name:"Service tools rows per page"}),{target:{value:"50"}});
+  fireEvent.click(screen.getByRole("combobox",{name:"Service tools rows per page"}));
+  const pageSizeOption = await screen.findByRole("option", { name: "50" });
+  fireEvent.pointerDown(pageSizeOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+  fireEvent.pointerUp(pageSizeOption, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+  fireEvent.click(pageSizeOption);
   fireEvent.click(screen.getByRole("button",{name:"Service tools next page"}));
   fireEvent.click(screen.getByRole("button",{name:"Service tools next page"}));
   expect(await screen.findByText("Search tool 101")).toBeTruthy();
@@ -57,4 +61,31 @@ it("retains exact Provider scope and query when extending lexical search",async(
   await waitFor(()=>expect(search).toHaveBeenCalledWith({
     query:"search",limit:30,sourceId:"provider:prov_1",cursor:"search-page-two",
   }));
+});
+
+it("unifies Enter/clear search and Reset without redundant Browse friction", async () => {
+  const browse = vi.fn().mockResolvedValue({ tools: tools.slice(0, 5) });
+  const search = vi.fn().mockResolvedValue({ tools: tools.slice(0, 1) });
+  show(browse, search);
+
+  expect(await screen.findByText("Search tool 1")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Reset" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Browse" })).toBeNull();
+
+  const input = screen.getByRole("textbox", { name: "Catalog search" });
+  fireEvent.change(input, { target: { value: "find" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+
+  await waitFor(() =>
+    expect(search).toHaveBeenCalledWith({
+      query: "find",
+      limit: 30,
+      sourceId: "provider:prov_1",
+    }),
+  );
+  expect(screen.getByRole("button", { name: "Reset" })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+  await waitFor(() => expect(browse).toHaveBeenCalledTimes(2));
+  expect((input as HTMLInputElement).value).toBe("");
 });

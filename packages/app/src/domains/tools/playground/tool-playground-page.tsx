@@ -23,6 +23,13 @@ import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Card } from "@mender/ui/components/card";
 import { Input } from "@mender/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mender/ui/components/select";
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { t } from "../../../i18n/i18n";
@@ -30,6 +37,45 @@ import { errorMessage } from "../../../shared/errors";
 import { toolSourceLabel } from "../tool-source-label";
 
 type PlaygroundTab = "arguments" | "schema" | "description";
+type ArgumentEditorMode = "form" | "json";
+
+interface SchemaPropertyDef {
+  type?: string | string[];
+  title?: string;
+  description?: string;
+  default?: unknown;
+  enum?: unknown[];
+}
+
+function getSchemaProperties(
+  schema: unknown,
+): { properties: Array<[string, SchemaPropertyDef]>; required: Set<string> } {
+  if (!schema || typeof schema !== "object") {
+    return { properties: [], required: new Set() };
+  }
+  const record = schema as Record<string, unknown>;
+  const rawProps = record.properties;
+  if (!rawProps || typeof rawProps !== "object" || Array.isArray(rawProps)) {
+    return { properties: [], required: new Set() };
+  }
+  const properties = Object.entries(rawProps as Record<string, unknown>).filter(
+    (entry): entry is [string, SchemaPropertyDef] =>
+      entry[1] !== null && typeof entry[1] === "object" && !Array.isArray(entry[1]),
+  );
+  const required = new Set(
+    Array.isArray(record.required)
+      ? record.required.filter((item): item is string => typeof item === "string")
+      : [],
+  );
+  return { properties, required };
+}
+
+function resolveSchemaType(type: string | string[] | undefined): string {
+  if (Array.isArray(type)) {
+    return type.find((item) => item !== "null") ?? "string";
+  }
+  return type ?? "string";
+}
 
 interface RunHistoryItem {
   id: string;
@@ -53,6 +99,7 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProviderId, setSelectedProviderId] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<PlaygroundTab>("arguments");
+  const [argMode, setArgMode] = useState<ArgumentEditorMode>("json");
 
   const [argumentsText, setArgumentsText] = useState("{}");
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -106,17 +153,19 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
 
         // Derive template from inputSchema
         const template: Record<string, unknown> = {};
-        if (
-          detail.inputSchema &&
-          typeof detail.inputSchema === "object" &&
-          "properties" in detail.inputSchema &&
-          typeof detail.inputSchema.properties === "object" &&
-          detail.inputSchema.properties !== null
-        ) {
-          const props = detail.inputSchema.properties as Record<string, { default?: unknown; type?: string }>;
-          for (const [key, prop] of Object.entries(props)) {
-            template[key] = prop.default !== undefined ? prop.default : prop.type === "number" ? 0 : prop.type === "boolean" ? false : "";
-          }
+        const { properties } = getSchemaProperties(detail.inputSchema);
+        for (const [key, prop] of properties) {
+          const propType = resolveSchemaType(prop.type);
+          template[key] =
+            prop.default !== undefined
+              ? prop.default
+              : propType === "number" || propType === "integer"
+                ? 0
+                : propType === "boolean"
+                  ? false
+                  : Array.isArray(prop.enum) && prop.enum.length > 0
+                    ? prop.enum[0]
+                    : "";
         }
         const formatted = Object.keys(template).length > 0 ? JSON.stringify(template, null, 2) : "{}";
         setArgumentsText(formatted);
@@ -218,6 +267,36 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
+  const { properties: schemaProperties, required: schemaRequired } = useMemo(
+    () => getSchemaProperties(activeTool?.inputSchema),
+    [activeTool],
+  );
+  const hasSchemaProperties = schemaProperties.length > 0;
+  const effectiveArgMode: ArgumentEditorMode = hasSchemaProperties ? argMode : "json";
+
+  const parsedArguments = useMemo<Record<string, unknown> | null>(() => {
+    try {
+      const parsed: unknown = JSON.parse(argumentsText);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [argumentsText]);
+
+  const updateArgumentField = (key: string, nextValue: unknown) => {
+    const base = parsedArguments ? { ...parsedArguments } : {};
+    if (nextValue === undefined) {
+      delete base[key];
+    } else {
+      base[key] = nextValue;
+    }
+    setArgumentsText(JSON.stringify(base, null, 2));
+    setJsonError(null);
+  };
+
   const filteredTools = useMemo(() => {
     return tools.filter((tool) => {
       if (selectedProviderId !== "all" && tool.sourceId !== selectedProviderId) {
@@ -236,7 +315,7 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
   return (
     <div
       data-slot="tool-playground"
-      className="flex h-[calc(100vh-100px)] min-h-[560px] w-full min-w-0 flex-col gap-3"
+      className="flex min-h-[520px] w-full min-w-0 flex-col gap-3 lg:h-[calc(100dvh-148px)]"
     >
       {/* Top action header */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-3 shadow-2xs">
@@ -304,19 +383,32 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
               />
             </div>
             {providers.length > 0 ? (
-              <select
-                aria-label={t("Filter by provider")}
+              <Select
                 value={selectedProviderId}
-                onChange={(e) => setSelectedProviderId(e.target.value)}
-                className="h-7 w-full rounded-md border border-input bg-card px-2 text-[11px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onValueChange={(next) => setSelectedProviderId(String(next))}
               >
-                <option value="all">{t("All providers")}</option>
-                {providers.map((p) => (
-                  <option key={p.providerId} value={`provider:${p.providerId}`}>
-                    {toolSourceLabel(p)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  size="sm"
+                  aria-label={t("Filter by provider")}
+                  className="h-7 w-full text-[11px]"
+                >
+                  <SelectValue>
+                    {selectedProviderId === "all"
+                      ? t("All providers")
+                      : toolSourceLabel(
+                          providers.find((p) => `provider:${p.providerId}` === selectedProviderId),
+                        )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("All providers")}</SelectItem>
+                  {providers.map((p) => (
+                    <SelectItem key={p.providerId} value={`provider:${p.providerId}`}>
+                      {toolSourceLabel(p)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : null}
           </div>
 
@@ -397,7 +489,7 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
                     ].join(" ")}
                   >
                     <FileCode2Icon className="size-3.5" aria-hidden="true" />
-                    <span>{t("Arguments (JSON)")}</span>
+                    <span>{t("Arguments")}</span>
                   </button>
                   <button
                     type="button"
@@ -431,27 +523,210 @@ export function ToolPlaygroundPage({ client }: { client: ManagementClient }) {
               {/* Tab Contents */}
               <div className="flex-1 min-h-0 overflow-y-auto p-3">
                 {activeTab === "arguments" ? (
-                  <div className="flex h-full flex-col gap-2">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className={jsonError ? "text-destructive font-medium" : "text-teal font-medium"}>
-                        {jsonError ? t("Invalid JSON") : t("Valid JSON")}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleFormatJson}
-                        className="h-6 text-[11px] px-2 text-muted-foreground"
-                      >
-                        {t("Format JSON")}
-                      </Button>
+                  <div className="flex h-full flex-col gap-2.5">
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        {hasSchemaProperties ? (
+                          <div
+                            role="group"
+                            aria-label={t("Arguments")}
+                            className="inline-flex rounded-md border border-border/80 bg-muted/40 p-0.5"
+                          >
+                            <button
+                              type="button"
+                              aria-pressed={effectiveArgMode === "form"}
+                              disabled={jsonError !== null}
+                              onClick={() => setArgMode("form")}
+                              className={[
+                                "rounded px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50",
+                                effectiveArgMode === "form"
+                                  ? "bg-background text-foreground shadow-2xs"
+                                  : "text-muted-foreground hover:text-foreground",
+                              ].join(" ")}
+                            >
+                              {t("Form")}
+                            </button>
+                            <button
+                              type="button"
+                              aria-pressed={effectiveArgMode === "json"}
+                              onClick={() => setArgMode("json")}
+                              className={[
+                                "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                                effectiveArgMode === "json"
+                                  ? "bg-background text-foreground shadow-2xs"
+                                  : "text-muted-foreground hover:text-foreground",
+                              ].join(" ")}
+                            >
+                              {t("JSON")}
+                            </button>
+                          </div>
+                        ) : null}
+                        <span className={jsonError ? "text-destructive font-medium" : "text-teal font-medium"}>
+                          {jsonError ? t("Invalid JSON") : t("Valid JSON")}
+                        </span>
+                      </div>
+                      {effectiveArgMode === "json" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleFormatJson}
+                          className="h-6 text-[11px] px-2 text-muted-foreground"
+                        >
+                          {t("Format JSON")}
+                        </Button>
+                      ) : null}
                     </div>
-                    <Textarea
-                      value={argumentsText}
-                      onChange={(e) => handleArgumentsChange(e.target.value)}
-                      aria-label={t("Arguments (JSON)")}
-                      className="flex-1 font-mono text-xs resize-none bg-muted/20 border-border/80"
-                    />
+
+                    {effectiveArgMode === "form" ? (
+                      <div className="space-y-3 pb-2">
+                        {schemaProperties.map(([key, prop]) => {
+                          const fieldId = `playground-arg-${key}`;
+                          const propType = resolveSchemaType(prop.type);
+                          const isRequired = schemaRequired.has(key);
+                          const currentValue = parsedArguments?.[key];
+                          const enumValues = Array.isArray(prop.enum) && prop.enum.length > 0 ? prop.enum : null;
+
+                          if (propType === "boolean" && !enumValues) {
+                            return (
+                              <label
+                                key={key}
+                                htmlFor={fieldId}
+                                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <span className="font-medium text-foreground">
+                                    {prop.title || key}
+                                    {isRequired ? <span className="ml-0.5 text-destructive">*</span> : null}
+                                  </span>
+                                  {prop.description ? (
+                                    <p className="mt-0.5 text-[11px] text-muted-foreground">{prop.description}</p>
+                                  ) : null}
+                                </div>
+                                <input
+                                  id={fieldId}
+                                  type="checkbox"
+                                  checked={Boolean(currentValue)}
+                                  onChange={(e) => updateArgumentField(key, e.target.checked)}
+                                  className="size-4 shrink-0 rounded border-input accent-primary"
+                                />
+                              </label>
+                            );
+                          }
+
+                          return (
+                            <div key={key} className="space-y-1">
+                              <label
+                                htmlFor={fieldId}
+                                className="flex items-center gap-1.5 text-xs font-medium text-foreground"
+                              >
+                                <span>{prop.title || key}</span>
+                                {isRequired ? <span className="text-destructive">*</span> : null}
+                                <span className="ml-auto font-mono text-[10px] font-normal text-muted-foreground">
+                                  {enumValues ? "enum" : propType}
+                                </span>
+                              </label>
+                              {enumValues ? (
+                                (() => {
+                                  const selectedIndex = enumValues.findIndex((item) => item === currentValue);
+                                  return (
+                                    <Select
+                                      value={selectedIndex >= 0 ? String(selectedIndex) : ""}
+                                      onValueChange={(raw) => {
+                                        const idx = Number(raw);
+                                        if (Number.isInteger(idx) && idx >= 0 && idx < enumValues.length) {
+                                          updateArgumentField(key, enumValues[idx]);
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger
+                                        id={fieldId}
+                                        size="sm"
+                                        aria-label={prop.title || key}
+                                        className="w-full text-xs"
+                                      >
+                                        <SelectValue placeholder={t("Select a value…")}>
+                                          {selectedIndex >= 0
+                                            ? String(enumValues[selectedIndex])
+                                            : t("Select a value…")}
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {enumValues.map((option, idx) => (
+                                          <SelectItem key={idx} value={String(idx)}>
+                                            {String(option)}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  );
+                                })()
+                              ) : propType === "number" || propType === "integer" ? (
+                                <Input
+                                  id={fieldId}
+                                  type="number"
+                                  step={propType === "integer" ? 1 : "any"}
+                                  value={typeof currentValue === "number" && Number.isFinite(currentValue) ? String(currentValue) : ""}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    if (raw === "") {
+                                      updateArgumentField(key, undefined);
+                                      return;
+                                    }
+                                    const parsedNum = Number(raw);
+                                    if (Number.isFinite(parsedNum)) {
+                                      updateArgumentField(key, parsedNum);
+                                    }
+                                  }}
+                                  className="h-8 text-xs"
+                                />
+                              ) : propType === "object" || propType === "array" ? (
+                                <Textarea
+                                  id={fieldId}
+                                  value={JSON.stringify(
+                                    currentValue ?? (propType === "array" ? [] : {}),
+                                    null,
+                                    2,
+                                  )}
+                                  onChange={(e) => {
+                                    try {
+                                      updateArgumentField(key, JSON.parse(e.target.value));
+                                    } catch {
+                                      // Ignore incomplete nested JSON until valid
+                                    }
+                                  }}
+                                  className="min-h-20 font-mono text-xs"
+                                />
+                              ) : (
+                                <Input
+                                  id={fieldId}
+                                  type="text"
+                                  value={
+                                    typeof currentValue === "string"
+                                      ? currentValue
+                                      : typeof currentValue === "number" || typeof currentValue === "boolean"
+                                        ? String(currentValue)
+                                        : ""
+                                  }
+                                  onChange={(e) => updateArgumentField(key, e.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              )}
+                              {prop.description ? (
+                                <p className="text-[11px] text-muted-foreground">{prop.description}</p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <Textarea
+                        value={argumentsText}
+                        onChange={(e) => handleArgumentsChange(e.target.value)}
+                        aria-label={t("Arguments (JSON)")}
+                        className="flex-1 font-mono text-xs resize-none bg-muted/20 border-border/80"
+                      />
+                    )}
                   </div>
                 ) : null}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowUpRightIcon, EyeIcon } from "lucide-react";
 
@@ -41,7 +41,7 @@ import {
   SearchField,
 } from "../../../shared/workbench";
 
-import { formatNumber, t } from "../../../i18n/i18n";
+import { formatNumber, t, tCount } from "../../../i18n/i18n";
 import { toolSourceLabel } from "../tool-source-label";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
@@ -66,8 +66,18 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
   const [retryVersion, setRetryVersion] = useState(0);
   const [busy, setBusy] = useState("");
   const [loadingToolId, setLoadingToolId] = useState("");
+  const searchDebounceRef = useRef<number | null>(null);
 
   const catalogPagination = usePagination(results);
+
+  const clearSearchDebounce = useCallback(() => {
+    if (searchDebounceRef.current !== null) {
+      window.clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearSearchDebounce(), [clearSearchDebounce]);
 
   useEffect(() => {
     let active = true;
@@ -95,7 +105,8 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
     };
   }, [client, providerId, sourceId, retryVersion]);
 
-  async function browseAll() {
+  const browseAll = useCallback(async () => {
+    clearSearchDebounce();
     setBusy("browse");
     setError("");
     try {
@@ -113,23 +124,25 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
     } finally {
       setBusy("");
     }
-  }
+  }, [catalogPagination, clearSearchDebounce, client, sourceId]);
 
-  async function search() {
-    if (!query.trim()) {
+  const search = useCallback(async (queryText = query) => {
+    clearSearchDebounce();
+    const trimmed = queryText.trim();
+    if (!trimmed) {
       return;
     }
     setBusy("search");
     setError("");
     try {
       const response = await client.searchTools({
-        query,
+        query: queryText,
         limit: 30,
         sourceId,
       });
       setResults(response.tools.filter(tool=>tool.sourceId===sourceId));
       setNextCursor(response.nextCursor ?? null);
-      setActiveQuery(query.trim());
+      setActiveQuery(trimmed);
       catalogPagination.reset();
       setSearched(true);
       setSelected(null);
@@ -140,6 +153,30 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
     } finally {
       setBusy("");
     }
+  }, [catalogPagination, clearSearchDebounce, client, query, sourceId]);
+
+  function handleQueryChange(nextQuery: string) {
+    setQuery(nextQuery);
+    clearSearchDebounce();
+    const trimmed = nextQuery.trim();
+    if (!trimmed) {
+      if (searched) {
+        void browseAll();
+      }
+      return;
+    }
+    if (trimmed === activeQuery && searched) {
+      return;
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      searchDebounceRef.current = null;
+      void search(nextQuery);
+    }, 350);
+  }
+
+  function resetSearch() {
+    setQuery("");
+    void browseAll();
   }
 
   async function loadMore() {
@@ -235,7 +272,7 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
                 label="Catalog search"
                 placeholder="Search intent, e.g. create issue"
                 value={query}
-                onChange={setQuery}
+                onChange={handleQueryChange}
                 onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
               />
             </div>
@@ -246,9 +283,11 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
             <Button size="sm" onClick={() => void search()} disabled={busy !== "" || !query.trim()}>
               {t(busy === "search" ? "Searching…" : "Search")}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => void browseAll()} disabled={busy !== ""}>
-              {t(busy === "browse" ? "Loading…" : "Browse")}
-            </Button>
+            {searched || query.trim() ? (
+              <Button size="sm" variant="outline" onClick={resetSearch} disabled={busy !== ""}>
+                {t(busy === "browse" ? "Loading…" : "Reset")}
+              </Button>
+            ) : null}
           </> : undefined
         }
       />
@@ -325,15 +364,35 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
           )}
       </ResultPanel>}
 
-      {hasSnapshot ? <TablePagination
-        label="Service tools"
-        pagination={catalogPagination}
-      /> : null}
-      {hasSnapshot && nextCursor ? <div className="flex justify-center py-3">
-        <Button size="sm" variant="outline" disabled={busy!==""} onClick={()=>void loadMore()}>
-          {t(busy==="more"?"Loading…":"Load more tools")}
-        </Button>
-      </div> : null}
+      {hasSnapshot && (results.length > 10 || nextCursor) ? (
+        <div
+          data-slot="catalog-pagination-footer"
+          className="mt-4 flex flex-col gap-3 px-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+        >
+          <TablePagination
+            label="Service tools"
+            pagination={catalogPagination}
+            className="mt-0 flex-1 px-0"
+          />
+          {nextCursor ? (
+            <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground">
+              {results.length <= 10 ? (
+                <span className="tabular-nums">
+                  {tCount(results.length, "{{count}} tool", "{{count}} tools")}
+                </span>
+              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy !== ""}
+                onClick={() => void loadMore()}
+              >
+                {t(busy === "more" ? "Loading…" : "Load more tools")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {hasSnapshot && results.length > 0 ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-1 text-sm text-muted-foreground">

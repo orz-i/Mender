@@ -19,7 +19,7 @@ import type {
   ProviderPlugin,
   ProviderPluginIssue,
 } from "@mender/sdk";
-import { Button } from "@mender/ui/components/button";
+import { Button, buttonVariants } from "@mender/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@mender/ui/components/p
 
 import { t, tCount, useLocale } from "../../../i18n/i18n";
 import { errorMessage } from "../../../shared/errors";
+import { IconButton } from "../../../shared/icon-button";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../../shared/form-identifiers";
 import { FormHeading } from "../../../shared/form-info";
 import { EmptyState, ErrorNotice, InsightBanner } from "../../../shared/page";
@@ -111,6 +112,7 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
 
   const [viewProvider, setViewProvider] = useState<Provider | null>(null);
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
   const [rebindRequest, setRebindRequest] = useState<{ provider: Provider; target: ProviderPlugin } | null>(null);
   const [authenticationProvider, setAuthenticationProvider] =
     useState<Provider | null>(null);
@@ -307,22 +309,22 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
     }
   }
 
-  async function deleteProvider(provider: Provider) {
-    if (
-      !window.confirm(
-        t('Delete provider "{{name}}"? Profile references will block deletion.', {
-          name: provider.namespace,
-        }),
-      )
-    ) {
-      return;
-    }
+  function requestDeleteProvider(provider: Provider) {
+    setError("");
+    setDeleteTarget(provider);
+  }
+
+  async function confirmDeleteProvider() {
+    if (deleteTarget === null) return;
+    const provider = deleteTarget;
     setBusy(provider.providerId);
     setError("");
     try {
       await client.deleteProvider(provider.providerId);
+      setDeleteTarget(null);
       await refresh();
     } catch (reason) {
+      setDeleteTarget(null);
       setError(errorMessage(reason));
     } finally {
       setBusy("");
@@ -468,10 +470,37 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
                     title={name} to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
                   {description ? <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-muted-foreground">{description}</p> : null}
                 </div>
-                <span data-slot="tool-count" className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
+                <span data-slot="tool-count" className="inline-flex shrink-0 items-center gap-1.5 text-[12px] tabular-nums text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className={["size-1.5 rounded-full", hasTools ? "bg-teal" : "bg-muted-foreground/60"].join(" ")}
+                  />
                   {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
                 </span>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+                    <Link
+                      to={"/tools/" + encodeURIComponent(provider.providerId)}
+                      className={buttonVariants({
+                        variant: "ghost",
+                        size: "sm",
+                        className: "text-muted-foreground hover:text-foreground",
+                      })}
+                    >
+                      {t("View tools")}
+                    </Link>
+                    <IconButton
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-8 text-muted-foreground"
+                      label={t("Sync {{provider}}", { provider: name })}
+                      disabled={busy !== ""}
+                      onClick={() => void syncProvider(provider)}
+                    >
+                      <RefreshCwIcon
+                        className={busy === provider.providerId ? "size-4 animate-spin" : "size-4"}
+                        aria-hidden="true"
+                      />
+                    </IconButton>
                     <Popover open={openActionsProviderId === provider.providerId}
                       onOpenChange={(open) => setOpenActionsProviderId(open ? provider.providerId : null)}>
                       <PopoverTrigger render={<Button size="icon-sm" variant="ghost" type="button" className="size-8 text-muted-foreground"
@@ -503,15 +532,10 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
                               <Link2Icon data-icon="inline-start" />{t("Rebind")}
                             </Button>
                           ) : null}
-                          <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Sync {{provider}}", {provider:name})}
-                            disabled={busy!==""}
-                            onClick={() => { setOpenActionsProviderId(null); void syncProvider(provider); }}>
-                            <RefreshCwIcon data-icon="inline-start" />{t("Sync")}
-                          </Button>
                           <Button size="sm" variant="ghost" className="justify-start text-destructive hover:text-destructive"
                             aria-label={t("Delete {{provider}}", {provider:name})}
                             disabled={busy!==""}
-                            onClick={() => { setOpenActionsProviderId(null); void deleteProvider(provider); }}>
+                            onClick={() => { setOpenActionsProviderId(null); requestDeleteProvider(provider); }}>
                             <Trash2Icon data-icon="inline-start" />{t("Delete")}
                           </Button>
                         </div>
@@ -642,6 +666,48 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
           refresh={refresh}
         />
       ) : null}
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && busy === "") {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {deleteTarget
+                ? t("Delete {{provider}}", { provider: toolSourceLabel(deleteTarget) })
+                : t("Delete")}
+            </DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? t('Delete provider "{{name}}"? Profile references will block deletion.', {
+                    name: deleteTarget.namespace,
+                  })
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={busy !== ""}
+              onClick={() => setDeleteTarget(null)}
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy !== ""}
+              onClick={() => void confirmDeleteProvider()}
+            >
+              {t(deleteTarget && busy === deleteTarget.providerId ? "Deleting…" : "Delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {rebindRequest !== null ? (
         <ProviderRebindDialog

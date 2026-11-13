@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ManagementClient, ToolDetail, ToolSummary } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,6 +51,8 @@ const mockToolDetail: ToolDetail = {
     properties: {
       location: { type: "string", default: "Shanghai" },
       days: { type: "number", default: 3 },
+      includeAlerts: { type: "boolean", default: false },
+      unit: { type: "string", enum: ["celsius", "fahrenheit"], default: "celsius" },
     },
     required: ["location"],
   },
@@ -71,6 +73,11 @@ function createMockClient() {
           displayName: "Weather Service",
           namespace: "weather",
         },
+        {
+          providerId: "jira_svc",
+          displayName: "Jira Service",
+          namespace: "jira",
+        },
       ],
     }),
     browseTools: vi.fn().mockResolvedValue({ tools: mockTools }),
@@ -79,6 +86,14 @@ function createMockClient() {
   } as unknown as ManagementClient;
 
   return { client, callTool: callToolMock };
+}
+
+async function selectOption(combobox: HTMLElement, optionName: string) {
+  fireEvent.click(combobox);
+  const option = await screen.findByRole("option", { name: optionName });
+  fireEvent.pointerDown(option, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+  fireEvent.pointerUp(option, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+  fireEvent.click(option);
 }
 
 describe("ToolPlaygroundPage studio workbench", () => {
@@ -112,6 +127,8 @@ describe("ToolPlaygroundPage studio workbench", () => {
       expect(callTool).toHaveBeenCalledWith("tool_test_01", {
         location: "Shanghai",
         days: 3,
+        includeAlerts: false,
+        unit: "celsius",
       });
     });
 
@@ -133,5 +150,69 @@ describe("ToolPlaygroundPage studio workbench", () => {
     expect(screen.getByText("Invalid JSON")).toBeTruthy();
     const runBtn = screen.getByRole("button", { name: /Run Tool/ });
     expect(runBtn.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Form" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("filters tools with the Select provider control and syncs Form and JSON bidirectionally", async () => {
+    const { client, callTool } = createMockClient();
+    const { container } = render(
+      <MemoryRouter>
+        <ToolPlaygroundPage client={client} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Create Ticket")).toBeTruthy();
+    const playgroundRoot = container.querySelector('[data-slot="tool-playground"]');
+    expect(playgroundRoot?.className).toContain("lg:h-[calc(100dvh-148px)]");
+
+    await selectOption(screen.getByRole("combobox", { name: "Filter by provider" }), "Weather Service");
+    await waitFor(() => expect(screen.queryByText("Create Ticket")).toBeNull());
+    expect(within(screen.getByRole("listbox", { name: "Available tools" })).getByText("Fetch Weather")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Form" }));
+    const locationInput = screen.getByLabelText<HTMLInputElement>(/location/);
+    const daysInput = screen.getByLabelText<HTMLInputElement>(/days/);
+    const alertsCheckbox = screen.getByLabelText<HTMLInputElement>(/includeAlerts/);
+    expect(locationInput.value).toBe("Shanghai");
+    expect(daysInput.value).toBe("3");
+    expect(alertsCheckbox.checked).toBe(false);
+
+    fireEvent.change(locationInput, { target: { value: "Beijing" } });
+    fireEvent.change(daysInput, { target: { value: "5" } });
+    fireEvent.click(alertsCheckbox);
+    await selectOption(screen.getByRole("combobox", { name: "unit" }), "fahrenheit");
+
+    fireEvent.click(screen.getByRole("button", { name: "JSON" }));
+    const jsonEditor = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Arguments (JSON)" });
+    expect(JSON.parse(jsonEditor.value)).toEqual({
+      location: "Beijing",
+      days: 5,
+      includeAlerts: true,
+      unit: "fahrenheit",
+    });
+
+    fireEvent.change(jsonEditor, {
+      target: {
+        value: JSON.stringify({
+          location: "Tokyo",
+          days: 2,
+          includeAlerts: false,
+          unit: "celsius",
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Form" }));
+    expect(screen.getByLabelText<HTMLInputElement>(/location/).value).toBe("Tokyo");
+    expect(screen.getByLabelText<HTMLInputElement>(/days/).value).toBe("2");
+
+    fireEvent.click(screen.getByRole("button", { name: /Run Tool/ }));
+    await waitFor(() => {
+      expect(callTool).toHaveBeenCalledWith("tool_test_01", {
+        location: "Tokyo",
+        days: 2,
+        includeAlerts: false,
+        unit: "celsius",
+      });
+    });
   });
 });
