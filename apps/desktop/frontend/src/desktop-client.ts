@@ -25,6 +25,7 @@ import type {
   ProviderPluginInstallation,
   ProviderPluginIssue,
   PluginCatalogueEntry,
+  RegistryPluginUpdate,
   IntegrationOffering,
   SkillDeployment,
   SkillInspection,
@@ -45,7 +46,6 @@ import type {
   AgentModelChoices,
   AgentTask,
   AgentTaskEvent,
-  SubmitTaskOptions,
   AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
@@ -78,6 +78,7 @@ import {
   type ProviderPluginInstallation as BindingProviderPluginInstallation,
   type ProviderPluginIssue as BindingProviderPluginIssue,
   type PluginCatalogueEntry as BindingPluginCatalogueEntry,
+  type RegistryPluginUpdate as BindingRegistryPluginUpdate,
   type IntegrationOffering as BindingIntegrationOffering,
   type SkillDeployment as BindingSkillDeployment,
   type SkillInspection as BindingSkillInspection,
@@ -95,7 +96,6 @@ import {
   type AgentModelChoices as BindingAgentModelChoices,
   type AgentTask as BindingAgentTask,
   type AgentTaskEvent as BindingAgentTaskEvent,
-  type SubmitTaskOptions as BindingSubmitTaskOptions,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxToolSuite as BindingSandboxToolSuite,
@@ -199,6 +199,33 @@ export function createDesktopMenderClient(): ManagementClient {
     },
     async deletePluginInstallation(installationId){
       await Service.DeletePluginInstallation(installationId);
+    },
+    async syncRegistry() {
+      const result = await Service.SyncRegistry();
+      return {
+        synced: result.synced,
+        count: result.count,
+      };
+    },
+    async installRegistryPlugin(body) {
+      return {
+        installation: providerPluginInstallation(
+          await Service.InstallRegistryPlugin(body.pluginId, body.version ?? ""),
+        ),
+      };
+    },
+    async upgradeRegistryPlugin(body) {
+      return {
+        installation: providerPluginInstallation(
+          await Service.UpgradeRegistryPlugin(body.installationId, body.version),
+        ),
+      };
+    },
+    async listRegistryUpdates() {
+      const result = await Service.ListRegistryUpdates();
+      return {
+        updates: (result.updates ?? []).map(registryPluginUpdate),
+      };
     },
     async listProviderPlugins() {
       const result = await Service.ListProviderPlugins();
@@ -491,11 +518,11 @@ export function createDesktopMenderClient(): ManagementClient {
 
       try {
         if (typeof Events?.On === "function") {
-          cleanupEvents = Events.On(`agent_task_event:${taskId}`, (ev: any) => {
+          cleanupEvents = Events.On(`agent_task_event:${taskId}`, (ev: { data?: unknown }) => {
             if (!active) return;
-            const data = ev?.data ?? ev;
+            const data: unknown = ev?.data ?? ev;
             if (data && typeof data === "object") {
-              const mapped = agentTaskEvent(data);
+              const mapped = agentTaskEvent(data as BindingAgentTaskEvent);
               if (mapped.seq > lastSeq) {
                 lastSeq = mapped.seq;
                 onEvent(mapped);
@@ -1313,8 +1340,8 @@ function providerPluginUISchema(
 
 function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogueEntry {
   if(!["provider.tools","sandbox.backend","tunnel.transport","agent.backend"].includes(value.kind) ||
-     !["builtin","local"].includes(value.sourceKind) ||
-     !["enabled","disabled","invalid","unavailable"].includes(value.status) ||
+     !["builtin","local","registry"].includes(value.sourceKind) ||
+     !["enabled","disabled","invalid","unavailable","available"].includes(value.status) ||
      !["none","create.provider","create.sandbox","create.agent","create.tunnel"].includes(value.marketplaceAction)){
     throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry or Marketplace action");
   }
@@ -1341,6 +1368,19 @@ function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogue
   };
 }
 
+function registryPluginUpdate(
+  value: BindingRegistryPluginUpdate,
+): RegistryPluginUpdate {
+  return {
+    installationId: value.installationId,
+    pluginId: value.pluginId,
+    ...(value.currentVersion ? { currentVersion: value.currentVersion } : {}),
+    targetVersion: value.targetVersion,
+    canUpgrade: value.canUpgrade,
+    usageCount: value.usageCount,
+  };
+}
+
 function providerPluginInstallation(
   value: BindingProviderPluginInstallation,
 ): ProviderPluginInstallation {
@@ -1348,7 +1388,7 @@ function providerPluginInstallation(
     installationId: value.installationId,
     pluginId: value.pluginId,
     packageVersion: value.packageVersion,
-    sourceKind: "local",
+    sourceKind: providerPluginInstallationSourceKind(value.sourceKind),
     digest: value.digest,
     status: providerPluginInstallationStatus(value.status),
     installedAt: value.installedAt,
@@ -1368,6 +1408,17 @@ function providerPluginInstallation(
       ? { capabilities: value.capabilities }
       : {}),
   };
+}
+
+function providerPluginInstallationSourceKind(
+  value: string,
+): ProviderPluginInstallation["sourceKind"] {
+  if (value === "local" || value === "registry") {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    "Unsupported Provider plugin installation source kind: " + value,
+  );
 }
 
 function providerPluginInstallationStatus(

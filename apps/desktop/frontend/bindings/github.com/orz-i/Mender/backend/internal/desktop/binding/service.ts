@@ -361,6 +361,13 @@ export function InstallProviderPlugin(sourcePath: string): $CancellablePromise<$
     return $Call.ByID(524382217, sourcePath);
 }
 
+/**
+ * InstallRegistryPlugin installs a plugin directly from the online registry index.
+ */
+export function InstallRegistryPlugin(pluginID: string, version: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(444431915, pluginID, version);
+}
+
 export function InstallSkill(sourcePath: string): $CancellablePromise<$models.SkillInstallation> {
     return $Call.ByID(3234224228, sourcePath);
 }
@@ -462,6 +469,13 @@ export function ListProviderPlugins(): $CancellablePromise<$models.ProviderPlugi
 
 export function ListProviders(): $CancellablePromise<$models.ProviderList> {
     return $Call.ByID(3638226830);
+}
+
+/**
+ * ListRegistryUpdates checks installed plugins against the registry cache and returns available updates.
+ */
+export function ListRegistryUpdates(): $CancellablePromise<$models.RegistryPluginUpdateList> {
+    return $Call.ByID(351833211);
 }
 
 export function ListSandboxes(): $CancellablePromise<$models.SandboxList> {
@@ -629,6 +643,13 @@ export function SyncProvider(providerID: string): $CancellablePromise<$models.Sy
     return $Call.ByID(2246585286, providerID);
 }
 
+/**
+ * SyncRegistry triggers synchronization of online registry metadata.
+ */
+export function SyncRegistry(): $CancellablePromise<$models.RegistrySyncResult> {
+    return $Call.ByID(377258640);
+}
+
 export function TrustSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
     return $Call.ByID(3977894639, installationID);
 }
@@ -675,4 +696,11 @@ export function UpdateRuntimeBudget(input: $models.RuntimeBudget): $CancellableP
 
 export function UpdateRuntimeIsolation(input: $models.RuntimeIsolation): $CancellablePromise<$models.RuntimeGovernanceStatus> {
     return $Call.ByID(455640737, input);
+}
+
+/**
+ * UpgradeRegistryPlugin upgrades an existing installed plugin in-place, enforcing usageCount == 0 (Option B).
+ */
+export function UpgradeRegistryPlugin(installationID: string, version: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(3653473348, installationID, version);
 }

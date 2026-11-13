@@ -17,10 +17,14 @@ import type {
   CreateProfileRequest,
   CreateProviderRequest,
   CreateSSHRemoteSandboxRequest,
+  InstallRegistryPluginRequest,
   ManagementClient,
   PolicyDefaultRequest,
   PolicyRuleInput,
+  ProviderPluginInstallation,
   RebindProviderRequest,
+  RegistryPluginUpdate,
+  RegistrySyncResult,
   ReplaceProfileSkillsRequest,
   ReplaceProfileToolsRequest,
   RotateCredentialRequest,
@@ -31,6 +35,7 @@ import type {
   StartOAuthCredentialRequest,
   SubmitTaskOptions,
   UpdateProviderRequest,
+  UpgradeRegistryPluginRequest,
 } from "./contracts/management-client";
 import type { paths } from "./generated/schema";
 
@@ -80,6 +85,30 @@ export function createMenderClient(
     async deletePluginInstallation(installationId:string){
       const result=await client.DELETE("/plugin-installations/{installationId}",{params:{path:{installationId}}});
       if(!result.response.ok)throwApiError(result.error,result.response);
+    },
+    async syncRegistry(): Promise<RegistrySyncResult> {
+      const result = await client.POST("/registry/sync" as any, {} as any);
+      return requireData(result as any);
+    },
+    async installRegistryPlugin(
+      body: InstallRegistryPluginRequest,
+    ): Promise<{ installation: ProviderPluginInstallation }> {
+      const result = await client.POST("/registry/plugins/install" as any, {
+        body,
+      } as any);
+      return requireData(result as any);
+    },
+    async upgradeRegistryPlugin(
+      body: UpgradeRegistryPluginRequest,
+    ): Promise<{ installation: ProviderPluginInstallation }> {
+      const result = await client.POST("/registry/plugins/upgrade" as any, {
+        body,
+      } as any);
+      return requireData(result as any);
+    },
+    async listRegistryUpdates(): Promise<{ updates: RegistryPluginUpdate[] }> {
+      const result = await client.GET("/registry/updates" as any, {} as any);
+      return requireData(result as any);
     },
     async listProviderPlugins() {
       const result = await client.GET("/provider-plugins");

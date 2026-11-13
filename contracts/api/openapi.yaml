@@ -104,6 +104,79 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /registry/sync:
+    post:
+      operationId: syncRegistry
+      responses:
+        '200':
+          description: Registry metadata synchronization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrySyncResult'
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /registry/plugins/install:
+    post:
+      operationId: installRegistryPlugin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallRegistryPluginRequest'
+      responses:
+        '200':
+          description: Plugin successfully installed from online registry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation: { $ref: '#/components/schemas/ProviderPluginInstallation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /registry/plugins/upgrade:
+    post:
+      operationId: upgradeRegistryPlugin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeRegistryPluginRequest'
+      responses:
+        '200':
+          description: Plugin successfully upgraded in-place
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation: { $ref: '#/components/schemas/ProviderPluginInstallation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /registry/updates:
+    get:
+      operationId: listRegistryUpdates
+      responses:
+        '200':
+          description: Available online registry updates for installed plugins
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updates]
+                properties:
+                  updates:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegistryPluginUpdate' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /provider-plugins:
     get:
       operationId: listProviderPlugins
@@ -2470,7 +2543,7 @@ components:
         displayName: { type: string }
         description: { type: string }
         packageVersion: { type: string }
-        sourceKind: { type: string, enum: [builtin, local] }
+        sourceKind: { type: string, enum: [builtin, local, registry] }
         status: { type: string, enum: [enabled, disabled, invalid, unavailable] }
         enabled: { type: boolean }
         capabilities:
@@ -2534,7 +2607,7 @@ components:
         packageVersion: { type: string }
         sourceKind:
           type: string
-          enum: [local]
+          enum: [local, registry]
         digest: { type: string }
         status:
           type: string
@@ -2547,6 +2620,36 @@ components:
         capabilities:
           type: array
           items: { type: string }
+      additionalProperties: false
+    RegistrySyncResult:
+      type: object
+      required: [synced]
+      properties:
+        synced: { type: boolean }
+        count: { type: integer, minimum: 0 }
+      additionalProperties: false
+    InstallRegistryPluginRequest:
+      type: object
+      required: [pluginId]
+      properties:
+        pluginId: { type: string }
+        version: { type: string }
+      additionalProperties: false
+    UpgradeRegistryPluginRequest:
+      type: object
+      required: [installationId, version]
+      properties:
+        installationId: { type: string }
+        version: { type: string }
+      additionalProperties: false
+    RegistryPluginUpdate:
+      type: object
+      required: [installationId, pluginId, targetVersion]
+      properties:
+        installationId: { type: string }
+        pluginId: { type: string }
+        currentVersion: { type: string }
+        targetVersion: { type: string }
       additionalProperties: false
     SkillInstallation:
       type: object

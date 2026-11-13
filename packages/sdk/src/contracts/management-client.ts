@@ -1,6 +1,9 @@
 import type { components } from "../generated/schema";
 
-export type PluginCatalogueEntry=components["schemas"]["PluginCatalogueEntry"];
+export type PluginCatalogueEntry = Omit<components["schemas"]["PluginCatalogueEntry"], "sourceKind" | "status"> & {
+  sourceKind: "builtin" | "local" | "registry";
+  status: "enabled" | "disabled" | "invalid" | "unavailable" | "available";
+};
 export type IntegrationOffering=components["schemas"]["IntegrationOffering"];
 export type CreateExternalSandboxRequest=components["schemas"]["CreateExternalSandboxRequest"];
 export type CreateExternalTunnelRequest=components["schemas"]["CreateExternalTunnelRequest"];
@@ -8,6 +11,26 @@ export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
 export type ProviderPluginIssue = components["schemas"]["ProviderPluginIssue"];
 export type ProviderPluginInstallation =
   components["schemas"]["ProviderPluginInstallation"];
+export interface RegistrySyncResult {
+  synced: boolean;
+  count?: number | undefined;
+}
+export interface InstallRegistryPluginRequest {
+  pluginId: string;
+  version?: string | undefined;
+}
+export interface UpgradeRegistryPluginRequest {
+  installationId: string;
+  version: string;
+}
+export interface RegistryPluginUpdate {
+  installationId: string;
+  pluginId: string;
+  currentVersion?: string | undefined;
+  targetVersion: string;
+  canUpgrade?: boolean | undefined;
+  usageCount?: number | undefined;
+}
 export type SkillInstallation = components["schemas"]["SkillInstallation"];
 export type SkillInspection = components["schemas"]["SkillInspection"];
 export type SkillDeployment = components["schemas"]["SkillDeployment"];
@@ -151,6 +174,10 @@ export interface ManagementClient {
   enablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;
   disablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;
   deletePluginInstallation(installationId:string):Promise<void>;
+  syncRegistry(): Promise<RegistrySyncResult>;
+  installRegistryPlugin(body: InstallRegistryPluginRequest): Promise<{ installation: ProviderPluginInstallation }>;
+  upgradeRegistryPlugin(body: UpgradeRegistryPluginRequest): Promise<{ installation: ProviderPluginInstallation }>;
+  listRegistryUpdates(): Promise<{ updates: RegistryPluginUpdate[] }>;
   listProviderPlugins(): Promise<{
     plugins: ProviderPlugin[];
     issues: ProviderPluginIssue[];

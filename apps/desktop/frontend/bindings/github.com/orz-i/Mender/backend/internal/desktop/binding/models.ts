@@ -675,6 +675,24 @@ export interface ProviderPluginList {
     "issues": ProviderPluginIssue[] | null;
 }
 
+export interface RegistryPluginUpdate {
+    "installationId": string;
+    "pluginId": string;
+    "currentVersion": string;
+    "targetVersion": string;
+    "canUpgrade": boolean;
+    "usageCount": number;
+}
+
+export interface RegistryPluginUpdateList {
+    "updates": RegistryPluginUpdate[] | null;
+}
+
+export interface RegistrySyncResult {
+    "synced": boolean;
+    "count": number;
+}
+
 export interface RuntimeBackend {
     "name": string;
     "restrictedHostAvailable": boolean;

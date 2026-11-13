@@ -698,6 +698,57 @@ func (s *Service) DeletePluginInstallation(rawID string) error {
 	return s.runtime.RemovePluginInstallation(s.ctx, id)
 }
 
+// SyncRegistry triggers synchronization of online registry metadata.
+func (s *Service) SyncRegistry() (RegistrySyncResult, error) {
+	synced, count, err := s.runtime.SyncRegistry(s.ctx)
+	if err != nil {
+		return RegistrySyncResult{}, err
+	}
+	return RegistrySyncResult{Synced: synced, Count: count}, nil
+}
+
+// InstallRegistryPlugin installs a plugin directly from the online registry index.
+func (s *Service) InstallRegistryPlugin(pluginID string, version string) (ProviderPluginInstallation, error) {
+	item, err := s.runtime.InstallRegistryPlugin(s.ctx, pluginID, version)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+
+// UpgradeRegistryPlugin upgrades an existing installed plugin in-place, enforcing usageCount == 0 (Option B).
+func (s *Service) UpgradeRegistryPlugin(installationID string, version string) (ProviderPluginInstallation, error) {
+	id, err := platformplugin.ParseInstallationID(installationID)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	item, err := s.runtime.UpgradeRegistryPlugin(s.ctx, id, version)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+
+// ListRegistryUpdates checks installed plugins against the registry cache and returns available updates.
+func (s *Service) ListRegistryUpdates() (RegistryPluginUpdateList, error) {
+	items, err := s.runtime.ListRegistryUpdates(s.ctx)
+	if err != nil {
+		return RegistryPluginUpdateList{}, err
+	}
+	updates := make([]RegistryPluginUpdate, 0, len(items))
+	for _, item := range items {
+		updates = append(updates, RegistryPluginUpdate{
+			InstallationID: item.InstallationID,
+			PluginID:       item.PluginID,
+			CurrentVersion: item.CurrentVersion,
+			TargetVersion:  item.TargetVersion,
+			CanUpgrade:     item.CanUpgrade,
+			UsageCount:     item.UsageCount,
+		})
+	}
+	return RegistryPluginUpdateList{Updates: updates}, nil
+}
+
 func (s *Service) ListProviderPlugins() (ProviderPluginList, error) {
 	catalog, err := s.runtime.ListAvailableProviderPluginCatalog(s.ctx)
 	if err != nil {

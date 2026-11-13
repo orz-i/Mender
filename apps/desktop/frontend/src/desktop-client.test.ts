@@ -1,4 +1,8 @@
-import { MenderClientInvariantError, type PolicyRuleInput } from "@mender/sdk";
+import {
+  MenderClientInvariantError,
+  type AgentTaskEvent,
+  type PolicyRuleInput,
+} from "@mender/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock(
@@ -42,7 +46,9 @@ vi.mock(
       ConfigureAgentToolPlacement: vi.fn(),
       InstallProviderPlugin: vi.fn(),
       InstallLocalPlugin: vi.fn(),
+      InstallRegistryPlugin: vi.fn(),
       ListPluginCatalogue: vi.fn(),
+      ListRegistryUpdates: vi.fn(),
       ListDockerImages: vi.fn(),
       EnablePluginInstallation:vi.fn(),
       DisablePluginInstallation:vi.fn(),
@@ -72,6 +78,7 @@ vi.mock(
       SetPolicyRuleEnabled: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
+      SyncRegistry: vi.fn(),
       TrustSkillInstallation: vi.fn(),
       UndeploySkill: vi.fn(),
       UndeployProfileSkill: vi.fn(),
@@ -80,6 +87,7 @@ vi.mock(
       UpdatePolicyRule: vi.fn(),
       UpdateRuntimeBudget: vi.fn(),
       UpdateRuntimeIsolation: vi.fn(),
+      UpgradeRegistryPlugin: vi.fn(),
     },
   }),
 );
@@ -203,7 +211,7 @@ describe("desktop Mender client", () => {
         },
       ],
     });
-    const received: any[] = [];
+    const received: AgentTaskEvent[] = [];
     const unsubscribe = client.subscribeAgentTaskEvents("atask_123", (ev) => {
       received.push(ev);
     });
@@ -1591,5 +1599,89 @@ describe("desktop Mender client", () => {
     vi.mocked(Service.RevealPath).mockResolvedValue();
     await expect(revealDesktopPath("/path/to/reveal")).resolves.toBeUndefined();
     expect(Service.RevealPath).toHaveBeenCalledWith("/path/to/reveal");
+  });
+
+  it("adapts online registry sync, install, upgrade, and update checks through Wails", async () => {
+    const installed = {
+      installationId: "pinst_0123456789abcdef0123456789abcdef",
+      pluginId: "com.example.registry-plugin",
+      packageVersion: "1.0.0",
+      sourceKind: "registry",
+      digest: "sha256:" + "a".repeat(64),
+      status: "enabled",
+      installedAt: "2026-11-13T00:00:00Z",
+      displayName: "Registry Plugin",
+      description: "Signed online plugin",
+      configVersion: 1,
+      protocolVersion: 1,
+      capabilities: ["echo"],
+    };
+    const upgraded = {
+      ...installed,
+      packageVersion: "2.0.0",
+    };
+    const updateEntry = {
+      installationId: installed.installationId,
+      pluginId: installed.pluginId,
+      currentVersion: "1.0.0",
+      targetVersion: "2.0.0",
+      canUpgrade: true,
+      usageCount: 0,
+    };
+
+    vi.mocked(Service.SyncRegistry).mockResolvedValue({
+      synced: true,
+      count: 3,
+    });
+    vi.mocked(Service.InstallRegistryPlugin).mockResolvedValue(installed);
+    vi.mocked(Service.UpgradeRegistryPlugin).mockResolvedValue(upgraded);
+    vi.mocked(Service.ListRegistryUpdates)
+      .mockResolvedValueOnce({ updates: [updateEntry] })
+      .mockResolvedValueOnce({ updates: null });
+
+    const client = createDesktopMenderClient();
+
+    await expect(client.syncRegistry()).resolves.toEqual({
+      synced: true,
+      count: 3,
+    });
+    expect(Service.SyncRegistry).toHaveBeenCalledWith();
+
+    await expect(
+      client.installRegistryPlugin({ pluginId: installed.pluginId }),
+    ).resolves.toEqual({ installation: installed });
+    expect(Service.InstallRegistryPlugin).toHaveBeenCalledWith(
+      installed.pluginId,
+      "",
+    );
+
+    await expect(
+      client.installRegistryPlugin({
+        pluginId: installed.pluginId,
+        version: "1.0.0",
+      }),
+    ).resolves.toEqual({ installation: installed });
+    expect(Service.InstallRegistryPlugin).toHaveBeenCalledWith(
+      installed.pluginId,
+      "1.0.0",
+    );
+
+    await expect(client.listRegistryUpdates()).resolves.toEqual({
+      updates: [updateEntry],
+    });
+    await expect(client.listRegistryUpdates()).resolves.toEqual({
+      updates: [],
+    });
+
+    await expect(
+      client.upgradeRegistryPlugin({
+        installationId: installed.installationId,
+        version: "2.0.0",
+      }),
+    ).resolves.toEqual({ installation: upgraded });
+    expect(Service.UpgradeRegistryPlugin).toHaveBeenCalledWith(
+      installed.installationId,
+      "2.0.0",
+    );
   });
 });

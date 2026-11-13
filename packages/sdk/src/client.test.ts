@@ -868,4 +868,111 @@ describe("Mender SDK", () => {
     expect(task.continuedFromTaskId).toBe("atask_002");
     expect(task.status).toBe("queued");
   });
+
+  it("triggers registry sync via syncRegistry", async () => {
+    let call = 0;
+    const fetch: (req: Request) => Promise<Response> = async (req) => {
+      call++;
+      expect(req.url).toBe("http://localhost:8080/api/v1/registry/sync");
+      expect(req.method).toBe("POST");
+      return new Response(JSON.stringify({ synced: true, count: 5 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const res = await client.syncRegistry();
+    expect(call).toBe(1);
+    expect(res).toEqual({ synced: true, count: 5 });
+  });
+
+  it("installs an online plugin via installRegistryPlugin", async () => {
+    let call = 0;
+    const fetch: (req: Request) => Promise<Response> = async (req) => {
+      call++;
+      expect(req.url).toBe("http://localhost:8080/api/v1/registry/plugins/install");
+      expect(req.method).toBe("POST");
+      const body = await req.json();
+      expect(body).toEqual({ pluginId: "dev.example.websearch", version: "1.0.0" });
+      return new Response(
+        JSON.stringify({
+          installation: {
+            installationId: "pinst_reg_001",
+            pluginId: "dev.example.websearch",
+            status: "enabled",
+            packageVersion: "1.0.0",
+            sourceKind: "registry",
+          },
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const res = await client.installRegistryPlugin({ pluginId: "dev.example.websearch", version: "1.0.0" });
+    expect(call).toBe(1);
+    expect(res.installation.installationId).toBe("pinst_reg_001");
+  });
+
+  it("upgrades an installed plugin via upgradeRegistryPlugin", async () => {
+    let call = 0;
+    const fetch: (req: Request) => Promise<Response> = async (req) => {
+      call++;
+      expect(req.url).toBe("http://localhost:8080/api/v1/registry/plugins/upgrade");
+      expect(req.method).toBe("POST");
+      const body = await req.json();
+      expect(body).toEqual({ installationId: "pinst_reg_001", version: "1.1.0" });
+      return new Response(
+        JSON.stringify({
+          installation: {
+            installationId: "pinst_reg_001",
+            pluginId: "dev.example.websearch",
+            status: "enabled",
+            packageVersion: "1.1.0",
+            sourceKind: "registry",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const res = await client.upgradeRegistryPlugin({ installationId: "pinst_reg_001", version: "1.1.0" });
+    expect(call).toBe(1);
+    expect(res.installation.packageVersion).toBe("1.1.0");
+  });
+
+  it("lists available updates via listRegistryUpdates", async () => {
+    let call = 0;
+    const fetch: (req: Request) => Promise<Response> = async (req) => {
+      call++;
+      expect(req.url).toBe("http://localhost:8080/api/v1/registry/updates");
+      expect(req.method).toBe("GET");
+      return new Response(
+        JSON.stringify({
+          updates: [
+            {
+              installationId: "pinst_reg_001",
+              pluginId: "dev.example.websearch",
+              currentVersion: "1.0.0",
+              targetVersion: "1.1.0",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const res = await client.listRegistryUpdates();
+    expect(call).toBe(1);
+    expect(res.updates).toHaveLength(1);
+    expect(res.updates[0]!.targetVersion).toBe("1.1.0");
+  });
 });

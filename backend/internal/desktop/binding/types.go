@@ -348,6 +348,24 @@ type ProviderPluginInstallationList struct {
 	Installations []ProviderPluginInstallation `json:"installations"`
 }
 
+type RegistrySyncResult struct {
+	Synced bool `json:"synced"`
+	Count  int  `json:"count"`
+}
+
+type RegistryPluginUpdate struct {
+	InstallationID string `json:"installationId"`
+	PluginID       string `json:"pluginId"`
+	CurrentVersion string `json:"currentVersion"`
+	TargetVersion  string `json:"targetVersion"`
+	CanUpgrade     bool   `json:"canUpgrade"`
+	UsageCount     int    `json:"usageCount"`
+}
+
+type RegistryPluginUpdateList struct {
+	Updates []RegistryPluginUpdate `json:"updates"`
+}
+
 type SkillInstallation struct {
 	SkillID         string `json:"skillId"`
 	InstallationID  string `json:"installationId"`

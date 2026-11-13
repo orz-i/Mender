@@ -116,6 +116,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["syncRegistry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/plugins/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["installRegistryPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/plugins/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["upgradeRegistryPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRegistryUpdates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/provider-plugins": {
         parameters: {
             query?: never;
@@ -2052,7 +2116,7 @@ export interface components {
             description: string;
             packageVersion: string;
             /** @enum {string} */
-            sourceKind: "builtin" | "local";
+            sourceKind: "builtin" | "local" | "registry";
             /** @enum {string} */
             status: "enabled" | "disabled" | "invalid" | "unavailable";
             enabled: boolean;
@@ -2099,7 +2163,7 @@ export interface components {
             pluginId: string;
             packageVersion: string;
             /** @enum {string} */
-            sourceKind: "local";
+            sourceKind: "local" | "registry";
             digest: string;
             /** @enum {string} */
             status: "enabled" | "disabled" | "invalid";
@@ -2110,6 +2174,24 @@ export interface components {
             configVersion?: number;
             protocolVersion?: number;
             capabilities?: string[];
+        };
+        RegistrySyncResult: {
+            synced: boolean;
+            count?: number;
+        };
+        InstallRegistryPluginRequest: {
+            pluginId: string;
+            version?: string;
+        };
+        UpgradeRegistryPluginRequest: {
+            installationId: string;
+            version: string;
+        };
+        RegistryPluginUpdate: {
+            installationId: string;
+            pluginId: string;
+            currentVersion?: string;
+            targetVersion: string;
         };
         SkillInstallation: {
             skillId: string;
@@ -3110,6 +3192,110 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    syncRegistry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry metadata synchronization result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrySyncResult"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    installRegistryPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRegistryPluginRequest"];
+            };
+        };
+        responses: {
+            /** @description Plugin successfully installed from online registry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["ProviderPluginInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    upgradeRegistryPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpgradeRegistryPluginRequest"];
+            };
+        };
+        responses: {
+            /** @description Plugin successfully upgraded in-place */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["ProviderPluginInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listRegistryUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available online registry updates for installed plugins */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        updates: components["schemas"]["RegistryPluginUpdate"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
     };
     listProviderPlugins: {
